@@ -1,9 +1,9 @@
 /* 仿 Word 編輯器（編輯頁專用）＋ 筆記內容共用樣式 .doc */
 :root{
-  --accent:#C0675A; --accent-d:#9B5247; --accent-l:#FBF1EE;
-  --ctx:#5E8C75;
+  --accent:#C2543A; --accent-d:#A8472F; --accent-l:#FBEAE3;
+  --ctx:#367156;
   --ink:#2B2725; --deep:#6E615A; --muted:#6E6762; --line:#E6E0D8;
-  --bg:#F8F5F1; --desk:#ECE9E5; --hover:#F2EEE8; --active:#F6E4DF;
+  --bg:#F8F5F1; --desk:#ECE9E5; --hover:#F2EEE8; --active:#FBEAE3;
   --ui:"Noto Sans TC","Noto Sans CJK TC","Microsoft JhengHei",sans-serif;
 }
 *{box-sizing:border-box}
@@ -21,7 +21,7 @@ button,input{font-family:inherit;font-size:inherit;color:inherit}
 .tabs{display:flex;gap:4px}
 .tab{background:none;border:none;padding:4px 14px;cursor:pointer;font-size:16px;color:var(--muted);border-radius:999px;line-height:1.6}
 .tab:hover{background:var(--hover);color:var(--ink)}
-.tab.on{background:var(--deep);color:#fff}
+.tab.on{background:var(--accent-l);color:var(--accent-d);font-weight:700}
 .tab.ctx{color:var(--ctx);font-weight:500}
 .tab.ctx.on{background:var(--ctx);color:#fff}
 .tab[hidden]{display:none}

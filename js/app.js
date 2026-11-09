@@ -32,18 +32,38 @@ async function callFn(name, body) {
 const fmtD = d => { d = new Date(d); return `${d.getMonth() + 1}/${d.getDate()}`; };
 const fmtFull = d => { d = new Date(d); return `${d.getFullYear()} 年 ${d.getMonth() + 1} 月 ${d.getDate()} 日`; };
 const fmtDT = d => new Date(d).toLocaleString('zh-TW', { hour12: false, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-const COLORS = ['#C0675A', '#5E8C75', '#A68B7B', '#6F87A3', '#B08A5E', '#8C7A9E', '#5F9393', '#A77080', '#7E9560', '#8C7B70'];
-const THUMBS = ['#8C7B70', '#A68B7B', '#7F9584', '#8F8598', '#A2906D', '#7D949B'];
+// 頭像底色：白字對比都在 4.5:1 以上
+const COLORS = ['#C2543A', '#367156', '#3A6E93', '#6A5A94', '#8C6A1E', '#A64D6B', '#2F7272', '#5E7A2E', '#9A5B2E', '#6E655C'];
+const TEACHER_COLOR = '#6E655C';
 const colorOf = id => { let h = 0; for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return COLORS[h % COLORS.length]; };
 const initial = s => (String(s || '?').trim()[0] || '?').toUpperCase();
-const logo = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 22 12 12 22 2 12Z" fill="#C0675A"/><path d="M12 8 16 12 12 16 8 12Z" fill="#fff"/></svg>';
+const logo = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 21.5 12 12 21.5 2.5 12Z" fill="none" stroke="#C2543A" stroke-width="1.8" stroke-linejoin="round"/><path d="M12 8 16 12 12 16 8 12Z" fill="#C2543A"/></svg>';
+// 線性圖示 24×24；語意固定：書本＝筆記、勾＝送出、時鐘＝未交、鉛筆＝草稿／編輯、山形＝進度、下載＝匯出、放大鏡＝搜尋
+const svg = d => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
 const ICON = {
-  plus: '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',
-  pen: '<svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
-  print: '<svg viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>',
-  search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
-  trash: '<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>',
+  plus: svg('<path d="M12 5v14M5 12h14"/>'),
+  pen: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
+  print: svg('<path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/>'),
+  search: svg('<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>'),
+  trash: svg('<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>'),
+  check: svg('<path d="m5 12.5 4.5 4.5L19 7"/>'),
+  clock: svg('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'),
+  book: svg('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7.5h6M9 11.5h6M9 15.5h3.5"/>'),
+  mountain: svg('<path d="M3 19 9.5 8.5l4 6.5 2.5-3.5L21 19Z"/>'),
+  back: svg('<path d="M19 12H5"/><path d="m11 18-6-6 6-6"/>'),
+  prev: svg('<path d="m15 18-6-6 6-6"/>'),
+  next: svg('<path d="m9 18 6-6-6-6"/>'),
+  info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'),
+  lock: svg('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
+  users: svg('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/>'),
+  archive: svg('<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/>'),
 };
+// 狀態標籤：圖示＋文字＋顏色
+const tagOk = t => `<span class="wk ok">${ICON.check}${t}</span>`;
+const tagTodo = t => `<span class="wk no">${ICON.clock}${t}</span>`;
+const tagDraft = t => `<span class="wk dr">${ICON.pen}${t}</span>`;
+const tagArch = t => `<span class="wk arch">${ICON.archive}${t}</span>`;
+const grad = n => 'g' + (((n - 1) % 4) + 4) % 4; // 四色輪替：蜂蜜、抹茶、藕紫、天空
 const loading = (t = '載入中⋯') => { app.innerHTML = `<div class="loading">${esc(t)}</div>`; };
 
 /* ---------- 對話框（取代瀏覽器的 alert/confirm） ---------- */
@@ -94,19 +114,20 @@ const hasUnsent = n => n.submitted_at && new Date(n.updated_at) - new Date(n.sub
 /* ---------- 上方列 ---------- */
 function topbar(crumbs) {
   const who = S.role === 'teacher'
-    ? { av: initial(S.me.display_name), label: S.me.display_name + ' 老師', color: '#7A6C65' }
+    ? { av: initial(S.me.display_name), label: S.me.display_name + ' 老師', color: TEACHER_COLOR }
     : { av: initial(S.me.display_name), label: S.me.display_name, color: colorOf(S.uid) };
+  const last = crumbs.length - 1;
   return `<header class="top"><div class="top-in">
-    <a class="abrand" href="#/">${logo}${esc(CFG.site)}</a>
-    <span class="crumb">${crumbs.map(c => c[1] ? `<span>›</span><a href="${c[1]}">${esc(c[0])}</a>` : `<span>›</span><span>${esc(c[0])}</span>`).join('')}</span>
+    <a class="abrand" href="#/" title="${esc(CFG.site)}"><span class="logo">${logo}</span><span class="bt">${esc(CFG.site)}</span></a>
+    <nav class="crumb" aria-label="目前位置">${crumbs.map((c, i) => (i ? `<span class="sep" aria-hidden="true">${ICON.next}</span>` : '') + (c[1] && i !== last ? `<a class="cp" href="${c[1]}">${esc(c[0])}</a>` : `<span class="cp ${i === last ? 'on' : ''}" ${i === last ? 'aria-current="page"' : ''}>${esc(c[0])}</span>`)).join('')}</nav>
     <span class="sp"></span>
-    ${S.role === 'teacher' && S.me.is_admin ? '<a class="link" href="#/admin">老師帳號</a>' : ''}
-    <a class="who-chip" href="#/me" style="text-decoration:none" title="我的帳號、改密碼"><span class="mini-av" style="background:${who.color}">${esc(who.av)}</span>${esc(who.label)}</a>
+    ${S.role === 'teacher' && S.me.is_admin ? `<a class="link" href="#/admin" title="老師帳號" aria-label="老師帳號">${ICON.users}<span class="wn">老師帳號</span></a>` : ''}
+    <a class="who-chip" href="#/me" title="我的帳號、改密碼"><span class="mini-av" style="background:${who.color}">${esc(who.av)}</span><span class="wn">${esc(who.label)}</span></a>
     <button class="link" data-act="logout">登出</button>
   </div></header>`;
 }
 function blogHead(student, cls, act = '') {
-  return `<section><div class="cover"></div><div class="profile">
+  return `<section class="blog-head"><div class="cover"></div><div class="profile">
     <div class="avatar" style="background:${colorOf(student.id)}">${esc(initial(student.display_name))}</div>
     <div class="who"><div class="blog-name">${esc(student.display_name)} 的學習紀錄</div><div class="blog-sub">${esc(cls.name)}${student.seat_no ? `　·　${student.seat_no} 號` : ''}</div></div>
     ${act ? `<div class="act">${act}</div>` : ''}
@@ -116,20 +137,24 @@ function noteCard(n, cls, link, isOwner) {
   const sent = !!n.submitted_at;
   const title = (sent ? n.sub_title : n.title) || n.title || '（還沒有標題）';
   const ex = (sent ? n.sub_text : n.content_text) || '';
-  const wk = weekNo(cls, n.first_submitted_at || n.created_at);
-  const pill = !sent ? '<span class="pill draft">草稿・還沒送出</span>'
-    : hasUnsent(n) && isOwner ? '<span class="pill draft">有修改還沒送出</span>'
-    : wk === curWeek(cls) ? '<span class="pill new">這週</span>' : '';
-  const th = n.cover_url ? `<div class="thumb img" style="background-image:url('${esc(n.cover_url)}')"></div>` : `<div class="thumb" style="background-color:${THUMBS[Math.abs(wk) % THUMBS.length]}"></div>`;
-  return `<button class="card ${sent ? '' : 'draft'}" data-go="${link}">${th}${pill}
-    <div class="cb"><div class="cdate">第 ${Math.max(1, wk)} 週・${fmtD(n.submitted_at || n.updated_at)}</div><div class="ctitle">${esc(title)}</div><div class="cex">${esc(ex.slice(0, 120)) || '（還沒有內容）'}</div></div></button>`;
+  const raw = weekNo(cls, n.first_submitted_at || n.created_at);
+  const wk = Math.max(1, raw);
+  const status = !sent ? tagDraft('草稿・還沒送出')
+    : hasUnsent(n) && isOwner ? tagDraft('有修改還沒送出')
+    : tagOk('已送出');
+  const pill = `<span class="pill">${sent && raw === curWeek(cls) ? '這週・' : ''}第 ${wk} 週</span>`;
+  const th = n.cover_url ? `<div class="thumb img" style="background-image:url('${esc(n.cover_url)}')">${pill}</div>`
+    : `<div class="thumb ${grad(wk)}"><span class="badge">${ICON.book}</span>${pill}</div>`;
+  return `<button class="card ${sent ? '' : 'draft'}" data-go="${link}">${th}
+    <div class="cb"><div class="cdate">第 ${wk} 週・${fmtD(n.submitted_at || n.updated_at)}</div><div class="ctitle">${esc(title)}</div><div class="cex">${esc(ex.slice(0, 120)) || '（還沒有內容）'}</div>
+    <div class="cfoot">${status}${n.word_count != null ? `<span>${n.word_count} 字</span>` : ''}</div></div></button>`;
 }
 
 /* ---------- 登入 ---------- */
 function viewLogin(params) {
   app.innerHTML = `
   <div class="login-bg"><div class="login">
-    <div class="login-head"><div class="s">${esc(CFG.school)}</div><div class="t">${esc(CFG.site)}</div></div>
+    <div class="login-head"><div class="logo">${logo}</div><div class="s">${esc(CFG.school)}</div><div class="t">${esc(CFG.site)}</div></div>
     <div class="seg"><button class="on" data-seg="stu" type="button">我是學生</button><button data-seg="tea" type="button">我是老師</button></div>
     <form id="fStu" autocomplete="on">
       <label class="fld"><span>帳號（登入卡上的數字）</span><input name="account" inputmode="numeric" autocomplete="username" required></label>
@@ -203,7 +228,7 @@ async function viewHome() {
     const names = tch.filter(t => t.class_id === c.id).map(t => t.teacher?.display_name).filter(Boolean).join('、');
     return `<button class="class-card" data-go="#/c/${c.id}"><div class="band ${c.archived ? 'arch' : (/八/.test(c.name) ? 'c8' : 'c7')}"></div><div class="ci">
       <div class="cn">${esc(c.name)}</div><div class="cm">${n} 位學生・${esc(names)}</div>
-      ${c.archived ? '<div class="cm">已封存・作品保留</div>' : `<div class="stat"><span>本週已送出 <b>${done}</b>/${n}</span><span>共 <b>${cn.filter(x => x.submitted_at).length}</b> 篇</span></div>`}</div></button>`;
+      ${c.archived ? `<div class="stat">${tagArch('已封存・作品保留')}</div>` : `<div class="stat"><span>本週已送出 <b>${done}</b>/${n}</span><span>共 <b>${cn.filter(x => x.submitted_at).length}</b> 篇</span></div>`}</div></button>`;
   };
   const open = classes.filter(c => !c.archived), arch = classes.filter(c => c.archived);
   app.innerHTML = topbar([['我的班級']]) + `
@@ -246,7 +271,7 @@ async function viewStudentHome() {
       const names = tch.filter(t => t.class_id === c.id).map(t => t.teacher?.display_name + ' 老師').join('、');
       return `<button class="class-card" data-go="#/c/${c.id}"><div class="band ${c.archived ? 'arch' : (/八/.test(c.name) ? 'c8' : 'c7')}"></div><div class="ci">
         <div class="cn">${esc(c.name)}</div><div class="cm">${esc(names)}</div>
-        <div class="stat"><span>已送出 <b>${mine.filter(n => n.submitted_at).length}</b> 篇</span>${c.archived ? '<span>已封存</span>' : doneNow ? '<span style="color:var(--green)">✓ 這週寫好了</span>' : '<span style="color:var(--accent-d)">這週還沒送出</span>'}</div></div></button>`;
+        <div class="stat"><span>已送出 <b>${mine.filter(n => n.submitted_at).length}</b> 篇</span>${c.archived ? tagArch('已封存') : doneNow ? tagOk('這週寫好了') : tagTodo('這週還沒送出')}</div></div></button>`;
     }).join('')}</div>` : '<div class="empty"><b>你還沒有加入任何班級</b>請找老師把你加進班級。</div>'}
   </div>`;
 }
@@ -273,12 +298,12 @@ async function viewMyBlog(cls) {
   ]);
   const me = { id: S.uid, display_name: S.me.display_name, seat_no: enr?.seat_no };
   const sent = notes.filter(n => n.submitted_at).length;
-  const act = cls.archived ? '<span class="pill draft" style="position:static">班級已封存，只能看不能改</span>' : `<button class="ab pri" data-act="newNote" data-cid="${cls.id}">${ICON.pen}寫新的筆記</button>`;
+  const act = cls.archived ? tagArch('班級已封存，只能看不能改') : `<button class="ab pri" data-act="newNote" data-cid="${cls.id}">${ICON.pen}寫新的筆記</button>`;
   app.innerHTML = topbar([[cls.name]]) + `
   <div class="wrap narrow">
     ${blogHead(me, cls, act)}
     <div class="sec-head"><h2>我的學習筆記</h2><span class="meta">已送出 ${sent} 篇・草稿 ${notes.length - sent} 篇</span></div>
-    ${notes.length ? `<div class="searchbar">${ICON.search.replace('<svg', '<svg style="width:22px;height:22px;stroke:var(--muted);fill:none;stroke-width:2"')}<input id="searchBox" placeholder="搜尋我寫過的詞，例如：菱形紋" autocomplete="off"></div>` : ''}
+    ${notes.length ? `<div class="searchbar"><input id="searchBox" placeholder="搜尋我寫過的詞，例如：菱形紋" autocomplete="off"></div>` : ''}
     <div id="noteArea">${notes.length ? `<div class="cards">${notes.map(n => noteCard(n, cls, n.submitted_at ? `#/n/${n.id}` : `#/e/${n.id}`, true)).join('')}</div>`
       : `<div class="empty"><b>還沒有筆記</b>${cls.archived ? '' : '按上面的「寫新的筆記」開始寫第一篇。'}</div>`}</div>
   </div>`;
@@ -322,7 +347,7 @@ async function newNote(cid) {
 async function loadClassData(cls) {
   const [enr, notes, tch, guard] = await Promise.all([
     q(sb.from('enrollments').select('seat_no, student:students(*)').eq('class_id', cls.id)),
-    q(sb.from('notes').select('id,student_id,title,sub_title,sub_text,content_text,created_at,updated_at,submitted_at,first_submitted_at,cover_url,hidden_by_teacher').eq('class_id', cls.id).order('created_at', { ascending: false })),
+    q(sb.from('notes').select('id,student_id,title,sub_title,sub_text,content_text,created_at,updated_at,submitted_at,first_submitted_at,cover_url,word_count,hidden_by_teacher').eq('class_id', cls.id).order('created_at', { ascending: false })),
     q(sb.from('class_teachers').select('teacher:teachers(id,display_name,email)').eq('class_id', cls.id)),
     q(sb.from('login_guard').select('account,locked_until')),
   ]);
@@ -330,22 +355,27 @@ async function loadClassData(cls) {
     .sort((a, b) => (a.seat_no ?? 999) - (b.seat_no ?? 999) || a.account.localeCompare(b.account));
   return { students, notes, teachers: tch.map(t => t.teacher).filter(Boolean), guard };
 }
+const pct = (a, b) => (b ? Math.min(100, a / b * 100) : 0);
+const statCard = (icon, tone, label, value, unit, p) => `<div class="stat-card"><div class="k"><span class="ic ${tone}">${ICON[icon]}</span>${label}</div>
+  <div class="v">${value}<small>${unit}</small></div><div class="bar ${tone}"><i style="width:${p}%"></i></div></div>`;
 function classHeader(cls, data, tab) {
   const tabs = [['blogs', '學生部落格'], ['progress', '進度一覽'], ['roster', '名單與帳號'], ['settings', '班級設定']];
   const wk = curWeek(cls);
   const st = data.students.map(s => weekStatus(cls, data.notes.filter(n => n.student_id === s.id), wk));
   const total = data.students.length || 0;
   const done = st.filter(x => x === 'd').length;
+  const todo = st.filter(x => x === 'n').length, draft = st.filter(x => x === 'r').length;
+  const avg = total ? data.notes.filter(n => n.submitted_at).length / total : 0;
   return topbar([['我的班級', '#/'], [cls.name]]) + `
   <div class="wrap">
-    <div class="class-head"><div><h1 class="pg">${esc(cls.name)}${cls.archived ? '<span class="pill draft" style="position:static;margin-left:10px;vertical-align:middle">已封存</span>' : ''}</h1>
+    <div class="class-head"><div><h1 class="pg">${esc(cls.name)}${cls.archived ? ` <span style="vertical-align:middle;font-size:18px">${tagArch('已封存')}</span>` : ''}</h1>
       <p class="sub" style="margin:0">${total} 位學生・${esc(data.teachers.map(t => t.display_name).join('、'))}・現在是第 ${wk} 週（${weekRange(cls, wk)}）</p></div></div>
     <nav class="ctabs">${tabs.map(([k, l]) => `<a href="#/c/${cls.id}${k === 'blogs' ? '' : '/' + k}" class="${k === tab ? 'on' : ''}">${l}</a>`).join('')}</nav>
     ${tab === 'blogs' || tab === 'progress' ? `<div class="stats">
-      <div class="stat-card"><div class="k">本週已送出</div><div class="v">${done}<small> / ${total} 人</small></div><div class="bar"><i style="width:${total ? done / total * 100 : 0}%"></i></div></div>
-      <div class="stat-card"><div class="k">本週還沒寫</div><div class="v" style="color:var(--accent-d)">${st.filter(x => x === 'n').length}<small> 人</small></div></div>
-      <div class="stat-card"><div class="k">寫了草稿、還沒送出</div><div class="v" style="color:var(--amber)">${st.filter(x => x === 'r').length}<small> 人</small></div></div>
-      <div class="stat-card"><div class="k">全班平均</div><div class="v">${total ? (data.notes.filter(n => n.submitted_at).length / total).toFixed(1) : 0}<small> 篇 / 人</small></div></div>
+      ${statCard('check', 'green', '本週已送出', done, ` / ${total} 人`, pct(done, total))}
+      ${statCard('clock', 'honey', '本週還沒寫', todo, ' 人', pct(todo, total))}
+      ${statCard('pen', 'sky', '寫了草稿、還沒送出', draft, ' 人', pct(draft, total))}
+      ${statCard('mountain', 'lilac', '全班平均', avg.toFixed(1), ' 篇 / 人', pct(avg, wk))}
     </div>` : ''}`;
 }
 async function viewTeacherClass(cls, tab) {
@@ -358,13 +388,14 @@ async function viewTeacherClass(cls, tab) {
       const sent = mine.filter(n => n.submitted_at).sort((a, b) => (b.submitted_at > a.submitted_at ? 1 : -1));
       const latest = sent[0];
       const st = weekStatus(cls, mine, wk);
-      const badge = st === 'd' ? '<span class="wk ok">✓ 本週已送出</span>' : st === 'r' ? '<span class="wk dr">草稿還沒送出</span>' : '<span class="wk no">本週還沒寫</span>';
+      const badge = st === 'd' ? tagOk('本週已送出') : st === 'r' ? tagDraft('草稿還沒送出') : tagTodo('本週還沒寫');
       const last = mine.length ? fmtD(mine.reduce((a, n) => (n.updated_at > a ? n.updated_at : a), '')) : '—';
       return `<button class="stu" data-go="#/c/${cls.id}/s/${s.id}" data-st="${st}" data-q="${esc(s.display_name + ' ' + s.name + ' ' + (s.seat_no || '') + ' ' + s.account)}">
-        <div class="sthumb ${latest?.cover_url ? 'img' : ''}" style="${latest?.cover_url ? `background-image:url('${esc(latest.cover_url)}')` : `background-color:${THUMBS[(s.seat_no || 0) % THUMBS.length]}`}">
-          <div class="lt">${latest ? '最新：' + esc(latest.sub_title || latest.title) : '還沒有送出的筆記'}</div><div class="sav" style="background:${colorOf(s.id)}">${esc(initial(s.display_name))}</div></div>
+        <div class="sthumb ${latest?.cover_url ? 'img' : grad(s.seat_no || 1)}" ${latest?.cover_url ? `style="background-image:url('${esc(latest.cover_url)}')"` : ''}>
+          <div class="sav" style="background:${colorOf(s.id)}">${esc(initial(s.display_name))}</div></div>
         <div class="sb"><div class="sn">${esc(s.display_name)} <small>${s.seat_no ?? ''} 號・${esc(s.name)}</small></div>
-          <div class="sm"><span>${sent.length} 篇</span><span>最近更新 ${last}</span></div>${badge}</div></button>`;
+          <div class="lt">${latest ? '最新：' + esc(latest.sub_title || latest.title) : '還沒有送出的筆記'}</div>
+          <div class="sm"><span>${sent.length} 篇</span><span>・</span><span>最近更新 ${last}</span></div>${badge}</div></button>`;
     }).join('');
     app.innerHTML = head + `
       <div class="filters"><button class="chip on" data-filter="all">全部</button><button class="chip" data-filter="todo">本週還沒送出</button>
@@ -411,7 +442,7 @@ async function viewStudentBlogAsTeacher(cls, sid) {
   app.innerHTML = topbar([['我的班級', '#/'], [cls.name, `#/c/${cls.id}`], [s.display_name]]) + `
   <div class="wrap narrow">
     <div class="teacher-banner"><b>老師檢視</b>${esc(s.display_name)}（${s.seat_no ?? ''} 號 ${esc(s.name)}）的全部筆記，包含還沒送出的草稿。<span class="sp"></span>
-      ${prev ? `<a class="ab sm" href="#/c/${cls.id}/s/${prev.id}">‹ ${esc(prev.display_name)}</a>` : ''}${next ? `<a class="ab sm" href="#/c/${cls.id}/s/${next.id}">${esc(next.display_name)} ›</a>` : ''}</div>
+      ${prev ? `<a class="ab sm" href="#/c/${cls.id}/s/${prev.id}">${ICON.prev}${esc(prev.display_name)}</a>` : ''}${next ? `<a class="ab sm" href="#/c/${cls.id}/s/${next.id}">${esc(next.display_name)}${ICON.next}</a>` : ''}</div>
     ${blogHead(s, cls)}
     <div class="sec-head"><h2>${esc(s.display_name)} 的學習筆記</h2><span class="meta">已送出 ${mine.filter(n => n.submitted_at).length} 篇・草稿 ${mine.filter(n => !n.submitted_at).length} 篇</span></div>
     ${mine.length ? `<div class="cards">${mine.map(n => noteCard(n, cls, `#/n/${n.id}`, false)).join('')}</div>` : '<div class="empty"><b>還沒有筆記</b></div>'}
@@ -430,7 +461,7 @@ async function viewRoster(cls, data, head) {
   const now = new Date();
   const locked = new Set(data.guard.filter(g => g.locked_until && new Date(g.locked_until) > now).map(g => g.account));
   app.innerHTML = head + `
-    ${cls.archived ? '<div class="note-banner">這個班級已封存。名單還可以看，但學生不能再寫。</div>' : ''}
+    ${cls.archived ? `<div class="note-banner">${ICON.archive}<span>這個班級已封存。名單還可以看，但學生不能再寫。</span></div>` : ''}
     <div class="two">
       <div class="box">
         <h3>貼上名單，建立帳號</h3>
@@ -455,7 +486,7 @@ async function viewRoster(cls, data, head) {
         <thead><tr><th>座號</th><th>姓名</th><th>顯示名稱</th><th>帳號</th><th>登入卡密碼</th><th>狀態</th><th></th></tr></thead>
         <tbody>${data.students.map(s => `<tr><td>${s.seat_no ?? ''}</td><td>${esc(s.name)}</td><td>${esc(s.display_name)}</td><td class="mono">${esc(s.account)}</td>
           <td>${s.card_password ? '<span style="color:var(--green)">有（可印卡）</span>' : '<span style="color:var(--muted)">學生已自己改密碼</span>'}</td>
-          <td>${locked.has(s.account) ? `<span class="wk no" style="margin:0">暫停登入</span> <button class="ab sm" data-unlock="${s.id}">解除</button>` : '<span style="color:var(--green)">正常</span>'}</td>
+          <td>${locked.has(s.account) ? `<span class="wk lock">${ICON.lock}暫停登入</span> <button class="ab sm" data-unlock="${s.id}">解除</button>` : '<span style="color:var(--green)">正常</span>'}</td>
           <td style="white-space:nowrap"><button class="ab sm" data-edit="${s.id}">修改</button> <button class="ab sm" data-reset="${s.id}">重設密碼</button> <button class="ab sm danger" data-remove="${s.id}">移出</button></td></tr>`).join('')}</tbody></table></div>`
         : '<p class="d">還沒有學生。</p>'}
     </div>
@@ -549,7 +580,7 @@ async function viewSettings(cls, data, head) {
       <div class="box">
         <h3>共同授課老師</h3>
         <p class="d">每位老師用自己的帳號登入，都能看全班的筆記、管理名單。</p>
-        <ul class="teachers">${data.teachers.map(t => `<li><span class="mini-av" style="background:#7A6C65">${esc(initial(t.display_name))}</span>${esc(t.display_name)}<span style="color:var(--muted);font-size:15px">${esc(t.email)}</span><span class="sp" style="flex:1"></span>
+        <ul class="teachers">${data.teachers.map(t => `<li><span class="mini-av" style="background:${TEACHER_COLOR}">${esc(initial(t.display_name))}</span>${esc(t.display_name)}<span style="color:var(--muted);font-size:15px">${esc(t.email)}</span><span class="sp" style="flex:1"></span>
           ${t.id !== S.uid && data.teachers.length > 1 ? `<button class="ab sm" data-rmt="${t.id}">移除</button>` : ''}</li>`).join('')}</ul>
         <form id="fAddT"><label class="fld"><span>加入老師（輸入老師帳號的 email）</span><input name="email" type="email" placeholder="teacher@tmail.ilc.edu.tw" required></label>
         <button class="ab" type="submit">加入</button></form>
@@ -608,7 +639,7 @@ async function viewCards(cid, params) {
   app.innerHTML = topbar([['我的班級', '#/'], [cls.name, `#/c/${cls.id}/roster`], ['登入卡']]) + `
   <div class="wrap">
     <div class="print-bar"><h1 class="pg" style="margin:0">登入卡</h1><span class="sp" style="flex:1"></span>
-      <a class="back-link" href="#/c/${cls.id}/roster" style="margin:0">← 回到名單與帳號</a>
+      <a class="back-link" href="#/c/${cls.id}/roster">${ICON.back}回到名單與帳號</a>
       <button class="ab dark" data-act="print">${ICON.print}列印（A4，一頁 8 張）</button></div>
     <p class="sub">剪下來發給學生。QR code 裡有帳號和密碼，用 Chromebook 的相機掃描就會直接登入；請學生收好、不要拍照上網。學生自己改過密碼的，卡上不會有 QR code。</p>
     ${list.length ? `<div class="sheet">${list.map(card).join('')}</div>` : '<div class="empty"><b>沒有學生</b></div>'}
@@ -638,15 +669,14 @@ async function viewNote(id, params) {
   const back = isOwner ? `#/c/${cls.id}` : `#/c/${cls.id}/s/${n.student_id}`;
   const crumbs = isOwner ? [[cls.name, back], [title]] : [['我的班級', '#/'], [cls.name, `#/c/${cls.id}`], [student.display_name, back], [title]];
   app.innerHTML = topbar(crumbs) + `
-  <div class="wrap narrow">
+  <div class="wrap read">
     ${blogHead(student, cls)}
-    <a class="back-link" href="${back}">← 回到${isOwner ? '我的' : ' ' + esc(student.display_name) + ' 的'}學習紀錄頁</a>
-    ${showDraft ? `<div class="note-banner">這篇還是<b>草稿</b>，還沒送出${isOwner ? '' : '（學生還在寫）'}。</div>` : ''}
-    ${!showDraft && hasUnsent(n) ? `<div class="note-banner">${isOwner ? '你有修改還沒送出。這裡顯示的是上次送出的版本。' : '學生有新的修改還沒送出；這裡顯示的是上次送出的版本。'}</div>` : ''}
+    <div class="post-bar"><a class="back-link" href="${back}">${ICON.back}回到${isOwner ? '我的' : ' ' + esc(student.display_name) + ' 的'}學習紀錄頁</a>
+      ${isOwner && !cls.archived ? `<span class="acts"><a class="ab sm" href="#/e/${n.id}">${ICON.pen}修改</a><button class="ab sm danger" data-act="delNote" data-id="${n.id}" data-back="${back}">${ICON.trash}刪除</button></span>` : ''}</div>
+    ${showDraft ? `<div class="note-banner">${ICON.pen}<span>這篇還是<b>草稿</b>，還沒送出${isOwner ? '' : '（學生還在寫）'}。</span></div>` : ''}
+    ${!showDraft && hasUnsent(n) ? `<div class="note-banner">${ICON.info}<span>${isOwner ? '你有修改還沒送出。這裡顯示的是上次送出的版本。' : '學生有新的修改還沒送出；這裡顯示的是上次送出的版本。'}</span></div>` : ''}
     <article class="post">
-      <div class="post-meta"><span class="tag">學習筆記</span><span>第 ${Math.max(1, weekNo(cls, n.first_submitted_at || n.created_at))} 週・${fmtFull(n.submitted_at || n.updated_at)}</span><span>·</span><span>${n.word_count} 字</span>
-        <span class="sp" style="flex:1"></span>
-        ${isOwner && !cls.archived ? `<a class="ab sm" href="#/e/${n.id}">${ICON.pen}修改</a> <button class="ab sm danger" data-act="delNote" data-id="${n.id}" data-back="${back}">${ICON.trash}刪除</button>` : ''}</div>
+      <div class="post-meta"><span class="tag">${ICON.book}學習筆記</span><span>第 ${Math.max(1, weekNo(cls, n.first_submitted_at || n.created_at))} 週・${fmtFull(n.submitted_at || n.updated_at)}</span><span>·</span><span>${n.word_count} 字</span></div>
       <h1 class="post-title">${esc(title)}</h1>
       <div class="doc post-body" id="postBody"></div>
     </article>
@@ -714,8 +744,8 @@ function showPreview(d) {
   const { cls, note } = editing;
   const pv = $('#appPreview');
   pv.innerHTML = `<div class="preview-bar"><div class="in"><button class="ab dark" id="pvBack">${ICON.pen}回到編輯</button><span class="sub" style="margin:0"><b style="color:var(--accent-d)">預覽</b>：送出之後，你的這篇筆記會長這樣</span></div></div>
-    <div class="wrap narrow">${blogHead({ id: S.uid, display_name: S.me.display_name }, cls)}
-      <article class="post"><div class="post-meta"><span class="tag">學習筆記</span><span>第 ${Math.max(1, weekNo(cls, note.first_submitted_at || new Date()))} 週・${fmtFull(new Date())}</span><span>·</span><span>${d.words} 字</span></div>
+    <div class="wrap read">${blogHead({ id: S.uid, display_name: S.me.display_name }, cls)}
+      <article class="post" style="margin-top:24px"><div class="post-meta"><span class="tag">${ICON.book}學習筆記</span><span>第 ${Math.max(1, weekNo(cls, note.first_submitted_at || new Date()))} 週・${fmtFull(new Date())}</span><span>·</span><span>${d.words} 字</span></div>
       <h1 class="post-title">${esc(d.title || '（還沒有標題）')}</h1><div class="doc post-body" id="pvBody"></div></article></div>`;
   renderDoc($('#pvBody'), d.html);
   $('#editorView').hidden = true; pv.hidden = false; pv.scrollTop = 0;
@@ -725,7 +755,7 @@ function showPreview(d) {
 /* ---------- 我的帳號／老師帳號管理 ---------- */
 function viewMe() {
   app.innerHTML = topbar([['我的帳號']]) + `
-  <div class="wrap narrow">
+  <div class="wrap read">
     <h1 class="pg">我的帳號</h1>
     <div class="box">
       <p>${S.role === 'student' ? `帳號：<b class="mono">${esc(S.me.account)}</b>　顯示名稱：<b>${esc(S.me.display_name)}</b>` : `Email：<b>${esc(S.me.email)}</b>　稱呼：<b>${esc(S.me.display_name)}</b>`}</p>
@@ -754,7 +784,7 @@ async function viewAdmin() {
   loading();
   const ts = await q(sb.from('teachers').select('*').order('created_at'));
   app.innerHTML = topbar([['老師帳號']]) + `
-  <div class="wrap narrow">
+  <div class="wrap read">
     <h1 class="pg">老師帳號</h1><p class="sub">只有管理者看得到這一頁。</p>
     <div class="box"><table class="acct"><thead><tr><th>稱呼</th><th>Email</th><th>身分</th></tr></thead>
       <tbody>${ts.map(t => `<tr><td>${esc(t.display_name)}</td><td>${esc(t.email)}</td><td>${t.is_admin ? '管理者' : '老師'}</td></tr>`).join('')}</tbody></table></div>
