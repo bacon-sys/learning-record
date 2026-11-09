@@ -22,6 +22,7 @@ const ICONS = {
   ar: P('M3 6h18M9 12h12M6 18h15'),
   aj: P('M3 6h18M3 12h18M3 18h18'),
   image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/>' + P('m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21'),
+  video: '<rect x="2" y="5" width="14" height="14" rx="2"/>' + P('m16 10 6-3.5v11L16 14'),
   table: '<rect x="3" y="3" width="18" height="18" rx="2"/>' + P('M3 9h18M3 15h18M9 3v18M15 3v18'),
   rowAbove: '<rect x="3" y="11" width="18" height="10" rx="1.5"/>' + P('M3 16h18M9 11v10M15 11v10') + P('M12 2v6M9 5h6'),
   rowBelow: '<rect x="3" y="3" width="18" height="10" rx="1.5"/>' + P('M3 8h18M9 3v10M15 3v10') + P('M12 16v6M9 19h6'),
@@ -97,7 +98,7 @@ function blockOf(node) {
 }
 function closestIn(node, sel) { const e = elOf(node); const c = e && e.closest ? e.closest(sel) : null; return c && editor.contains(c) ? c : null; }
 const isBlockEl = n => n && n.nodeType === 1 && BLOCKISH_RE.test(n.tagName);
-function isEmptyBlock(b) { return !b.querySelector('img,table') && b.textContent.replace(/[​\s]/g, '') === ''; }
+function isEmptyBlock(b) { return !(b.classList && b.classList.contains('video-wrap')) && !b.querySelector('img,table,.video-wrap') && b.textContent.replace(/[​\s]/g, '') === ''; }
 function newP() { const p = document.createElement('p'); p.innerHTML = '<br>'; return p; }
 
 /* ---------- 復原／重做（自己管理，才能涵蓋所有操作） ---------- */
@@ -470,6 +471,49 @@ function tabCell(back) {
   return true;
 }
 
+/* ---------- 影片（YouTube／Google 雲端硬碟連結） ---------- */
+const VIDEO_RE = /^(yt:[\w-]{11}|gd:[\w-]{20,})$/;
+function parseVideo(url) {
+  url = String(url || '').trim();
+  let m = url.match(/(?:youtube\.com\/(?:watch\?(?:[^#]*&)?v=|shorts\/|embed\/|live\/)|youtu\.be\/)([\w-]{11})/i);
+  if (m) return 'yt:' + m[1];
+  m = url.match(/drive\.google\.com\/(?:file\/d\/|open\?(?:[^#]*&)?id=)([\w-]{20,})/i);
+  if (m) return 'gd:' + m[1];
+  return null;
+}
+const videoThumb = spec => spec.startsWith('yt:') ? `https://i.ytimg.com/vi/${spec.slice(3)}/hqdefault.jpg` : null;
+function videoBlock(spec) {
+  const p = document.createElement('p'); p.className = 'video-wrap'; p.setAttribute('data-video', spec); p.contentEditable = 'false';
+  const box = document.createElement('span'); box.className = 'vbox';
+  const th = videoThumb(spec); if (th) box.style.backgroundImage = `url("${th}")`;
+  p.appendChild(box); return p;
+}
+let selVideo = null, pendingVideoRange = null;
+function clearVideoSel() { if (selVideo) selVideo.classList.remove('is-sel'); selVideo = null; }
+function selectVideo(v) {
+  clearImgSel(); clearVideoSel(); selVideo = v; v.classList.add('is-sel');
+  editor.focus({ preventScroll: true }); const r = document.createRange(); r.selectNode(v); setSel(r);
+}
+function delVideo() {
+  const v = selVideo; if (!v) return;
+  run(() => { const p = newP(); v.replaceWith(p); selVideo = null; caretIn(p, true); });
+}
+function openVideoDialog() {
+  const r = curRange() || savedRange; pendingVideoRange = r ? r.cloneRange() : null;
+  const m = $('#videoModal'); $('#videoUrl').value = ''; $('#videoMsg').textContent = '';
+  m.classList.add('on'); setTimeout(() => $('#videoUrl').focus(), 30);
+}
+function insertVideoFromDialog() {
+  const spec = parseVideo($('#videoUrl').value);
+  if (!spec) { $('#videoMsg').textContent = '看不懂這個網址。請貼上 YouTube 影片，或 Google 雲端硬碟影片的分享連結。'; return; }
+  $('#videoModal').classList.remove('on');
+  editor.focus({ preventScroll: true });
+  const range = pendingVideoRange;
+  if (range && range.startContainer.isConnected && inEditor(range.startContainer)) setSel(range);
+  run(() => { const next = insertBlocks([videoBlock(spec)]); if (next) caretIn(next, true); });
+  toast(spec.startsWith('gd:') ? '已插入影片。雲端硬碟的影片要設成「知道連結的任何人」家長才看得到' : '已插入影片');
+}
+
 /* ---------- 圖片 ---------- */
 const imgData = new Map(); // blob 網址 → data 網址（存草稿用）
 function dataURLtoBlob(d) {
@@ -504,10 +548,16 @@ async function compressImage(file) {
 async function insertImages(files, range) {
   const list = [...files].filter(f => /^image\//.test(f.type));
   if (!list.length) return;
-  toast('圖片處理中⋯');
-  const items = [];
+  toast(H.onUpload ? '照片上傳中⋯' : '圖片處理中⋯');
+  const items = []; let local = 0;
   for (const f of list) {
-    try { const c = await compressImage(f); items.push({ url: await registerBlob(c.blob), w: c.w, h: c.h }); }
+    try {
+      const c = await compressImage(f);
+      let url = null;
+      if (H.onUpload) { try { url = await H.onUpload(c.blob); } catch (e) { console.error(e); } }
+      if (!url) { url = await registerBlob(c.blob); local++; }
+      items.push({ url, w: c.w, h: c.h });
+    }
     catch (e) { console.error(e); toast('有一張圖片讀不出來，請換一張試試'); }
   }
   if (!items.length) return;
@@ -523,7 +573,18 @@ async function insertImages(files, range) {
     const next = insertBlocks(nodes);
     if (next) caretIn(next, true);
   });
-  toast(`已插入 ${items.length} 張圖片`);
+  toast(local && H.onUpload ? '網路不穩，照片先放在筆記裡，存檔時會再上傳' : `已插入 ${items.length} 張圖片`);
+}
+// 還沒上傳的照片（網路不穩時插入的、從別處貼上的、舊筆記裡的）在存檔前補傳
+async function uploadPending() {
+  if (!H.onUpload) return;
+  for (const i of [...editor.querySelectorAll('img')]) {
+    const key = i.getAttribute('src');
+    if (!imgData.has(key)) continue;
+    let url = null;
+    try { url = await H.onUpload(dataURLtoBlob(imgData.get(key))); } catch (e) { console.error(e); return; }
+    if (url && i.isConnected) i.setAttribute('src', url);
+  }
 }
 function setImgSel(img) {
   if (selImg && selImg !== img) selImg.classList.remove('is-sel');
@@ -602,6 +663,8 @@ function cleanInto(src, out) {
       continue;
     }
     if (ch.nodeType !== 1) continue;
+    const vd = ch.getAttribute('data-video');
+    if (vd && VIDEO_RE.test(vd)) { out.appendChild(videoBlock(vd)); continue; }
     let tag = ch.tagName.toUpperCase();
     if (DROP_TAGS.has(tag)) continue;
     if (tag === 'IMG') {
@@ -692,6 +755,7 @@ const CMDS = {
   indent: () => indent(1), outdent: () => indent(-1),
   alignLeft: () => run(() => ec('justifyLeft', null, true)), alignCenter: () => run(() => ec('justifyCenter', null, true)),
   alignRight: () => run(() => ec('justifyRight', null, true)), alignJustify: () => run(() => ec('justifyFull', null, true)),
+  insertVideo: openVideoDialog,
   pickImage: () => { const r = curRange() || savedRange; pendingImageRange = r ? r.cloneRange() : null; $('#fileInput').click(); },
   rowAbove: () => addRow(-1), rowBelow: () => addRow(1), colLeft: () => addCol(-1), colRight: () => addCol(1),
   delRow, delCol, delTable, delImage,
@@ -846,6 +910,7 @@ editor.addEventListener('keydown', e => {
     return;
   }
   if ((e.key === 'Backspace' || e.key === 'Delete') && selImg) { e.preventDefault(); delImage(); return; }
+  if ((e.key === 'Backspace' || e.key === 'Delete') && selVideo) { e.preventDefault(); delVideo(); return; }
   if (e.key === 'Backspace' && !mod && !e.shiftKey) {
     // 像 Word：在項目最前面按 Backspace，先拿掉項目符號
     const r = curRange();
@@ -891,7 +956,12 @@ editor.addEventListener('input', e => {
 });
 editor.addEventListener('compositionstart', () => { composing = true; editor.classList.remove('is-empty'); });
 editor.addEventListener('compositionend', () => { composing = false; scheduleCommit(); changed(); });
-editor.addEventListener('mousedown', e => { if (e.target.tagName === 'IMG') { e.preventDefault(); selectImage(e.target); } });
+editor.addEventListener('mousedown', e => {
+  const v = e.target.closest && e.target.closest('.video-wrap');
+  if (v && editor.contains(v)) { e.preventDefault(); selectVideo(v); return; }
+  clearVideoSel();
+  if (e.target.tagName === 'IMG') { e.preventDefault(); selectImage(e.target); }
+});
 editor.addEventListener('dragstart', e => { if (e.target.tagName === 'IMG') e.preventDefault(); });
 editor.addEventListener('paste', e => {
   const cd = e.clipboardData; if (!cd) return;
@@ -953,6 +1023,7 @@ function serialize() {
     i.classList.remove('is-sel'); if (!i.className) i.removeAttribute('class');
     const d = imgData.get(i.getAttribute('src')); if (d) i.setAttribute('src', d);
   });
+  c.querySelectorAll('.is-sel').forEach(x => x.classList.remove('is-sel'));
   c.querySelectorAll('span').forEach(s => { if (s.textContent === ZW) s.remove(); });
   return c.innerHTML.replace(/​/g, '');
 }
@@ -960,22 +1031,37 @@ function plainText() { return (editor.innerText || '').replace(/​/g, '').repla
 const currentSig = () => titleEl.value + '\u0001' + serialize();
 function getData() { return { title: titleEl.value.trim(), html: serialize(), text: plainText(), words: countWords() }; }
 const thumbCache = new Map();
+const hashStr = t => { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16) + t.length.toString(16); };
 function makeThumb() {
-  const img = editor.querySelector('img'); if (!img) return Promise.resolve(null);
-  const key = imgData.get(img.getAttribute('src')) || img.src;
-  if (thumbCache.has(key)) return Promise.resolve(thumbCache.get(key));
-  return new Promise(res => {
+  const first = editor.querySelector('img, .video-wrap'); if (!first) return Promise.resolve(null);
+  if (first.classList.contains('video-wrap')) return Promise.resolve(videoThumb(first.getAttribute('data-video') || ''));
+  const img = first, src = img.getAttribute('src') || '';
+  const key = imgData.get(src) || src;
+  if (thumbCache.has(key)) return thumbCache.get(key);
+  const p = new Promise(res => {
     const im = new Image();
+    const fallback = () => res(/^https?:/.test(src) ? src : null);
+    im.crossOrigin = 'anonymous';
     im.onload = () => {
       const W = 480, H2 = 300, cv = document.createElement('canvas'); cv.width = W; cv.height = H2;
       const ctx = cv.getContext('2d'), s = Math.max(W / im.naturalWidth, H2 / im.naturalHeight);
       const w = im.naturalWidth * s, h = im.naturalHeight * s;
       ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H2); ctx.drawImage(im, (W - w) / 2, (H2 - h) / 2, w, h);
-      const d = cv.toDataURL('image/jpeg', 0.72); thumbCache.set(key, d); res(d);
+      try {
+        cv.toBlob(async b => {
+          let out = null;
+          if (b && H.onUpload) { try { out = await H.onUpload(b, 'thumb-' + hashStr(key)); } catch (e) { console.error(e); } }
+          if (!out) { try { out = cv.toDataURL('image/jpeg', 0.72); } catch (e) { out = null; } }
+          res(out || (/^https?:/.test(src) ? src : null));
+        }, 'image/jpeg', 0.72);
+      } catch (e) { fallback(); }
     };
-    im.onerror = () => res(null);
+    im.onerror = fallback;
     im.src = img.src;
   });
+  thumbCache.set(key, p);
+  p.then(r => { if (!r) thumbCache.delete(key); });
+  return p;
 }
 function backupLocal() {
   if (!noteKey) return;
@@ -996,8 +1082,9 @@ async function flushSave() {
   if (hist.pending) commit();
   const key = noteKey;
   const run_ = (async () => {
-    const data = getData(); data.thumb = await makeThumb();
     setSave('', '儲存中⋯');
+    await uploadPending();
+    const data = getData(); data.thumb = await makeThumb();
     await H.onSave(data);
   })();
   saving = run_;
@@ -1046,7 +1133,7 @@ function openSubmit() {
   closePops(); if (hist.pending) commit();
   const m = $('#submitModal');
   const title = titleEl.value.trim();
-  const empty = !editor.textContent.replace(/[​\s]/g, '') && !editor.querySelector('img,table');
+  const empty = !editor.textContent.replace(/[​\s]/g, '') && !editor.querySelector('img,table,.video-wrap');
   if (!title || empty) {
     $('#smTitle').textContent = '還差一點點';
     $('#smBody').innerHTML = `<p>${!title ? '這篇筆記還沒有<b>標題</b>。' : ''}${empty ? '內容還是空的，先寫一些再送出吧。' : ''}</p>`;
@@ -1077,6 +1164,8 @@ document.addEventListener('click', async e => {
   }
 });
 $('#btnSubmit').addEventListener('click', openSubmit);
+$('#videoOk').addEventListener('click', insertVideoFromDialog);
+$('#videoUrl').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); insertVideoFromDialog(); } });
 
 /* ---------- 給平台用的介面 ---------- */
 function loadContent(title, html) {
@@ -1084,6 +1173,7 @@ function loadContent(title, html) {
   titleEl.value = title || '';
   editor.innerHTML = html || '<p><br></p>';
   editor.querySelectorAll('img').forEach(i => { const s = i.getAttribute('src') || ''; if (s.startsWith('data:')) { try { i.src = registerDataURL(s); } catch (e) {} } });
+  editor.querySelectorAll('.video-wrap').forEach(v => { const sp = v.getAttribute('data-video') || ''; if (VIDEO_RE.test(sp)) v.replaceWith(videoBlock(sp)); else v.remove(); });
   fixEmpty();
   hist.stack = [{ html: snapHTML(), sel: null }]; hist.idx = 0; hist.pending = false; clearTimeout(hist.timer);
   updateEmpty(); updateUndoBtns();
@@ -1110,10 +1200,10 @@ window.LREditor = {
     setTimeout(() => { if (!titleEl.value) titleEl.focus(); else { editor.focus(); placeEnd(); } }, 50);
   },
   flush: flushSave,
-  close() { clearTimeout(saveTimer); noteKey = null; H = {}; clearImgSel(); closePops(); },
+  close() { clearTimeout(saveTimer); noteKey = null; H = {}; clearImgSel(); clearVideoSel(); closePops(); },
   isOpen: () => !!noteKey,
 };
 
 // 測試用掛鉤
-window.__editor = { sanitize, serialize, countWords, hist, applySize, insertTable, CMDS, compressImage };
+window.__editor = { sanitize, serialize, countWords, hist, applySize, insertTable, CMDS, compressImage, parseVideo };
 })();

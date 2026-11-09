@@ -164,3 +164,22 @@ kbd{display:inline-block;border:1px solid #CFC6BB;border-bottom-width:3px;border
 }
 #editorView .topline .link-btn,#editorView .topline .pv-btn,#editorView .tab{white-space:nowrap}
 @media (max-width:900px){#editorView .topline .full{display:none}}
+
+/* ===== 影片區塊（編輯器與文章頁共用） ===== */
+.video-wrap{margin:8pt 0;text-align:center}
+.video-wrap .vbox{display:inline-block;width:75%;max-width:640px;aspect-ratio:16/9;border-radius:12px;position:relative;vertical-align:middle;
+  background:#2E2A26 center/cover no-repeat;overflow:hidden;cursor:pointer;border:none;padding:0}
+.video-wrap[data-video^="gd:"] .vbox{background:linear-gradient(135deg,#D2E5F1,#BED8EA)}
+.video-wrap .vbox::after{content:"";position:absolute;left:50%;top:50%;width:68px;height:68px;margin:-34px 0 0 -34px;border-radius:50%;
+  background:rgba(0,0,0,.6) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M8 5v14l11-7z' fill='%23fff'/%3E%3C/svg%3E") 56% center/30px no-repeat}
+.video-wrap::after{display:block;font-size:10.5pt;color:#6E655C;margin-top:4px}
+.video-wrap[data-video^="yt:"]::after{content:"YouTube 影片"}
+.video-wrap[data-video^="gd:"]::after{content:"Google 雲端硬碟影片"}
+#editor .video-wrap.is-sel .vbox{outline:3px solid var(--accent);outline-offset:2px}
+.video-wrap iframe{width:75%;max-width:640px;aspect-ratio:16/9;border:0;border-radius:12px;background:#000;vertical-align:middle}
+.vfld{display:block;margin:12px 0 4px}
+.vfld span{display:block;font-size:16px;color:var(--muted);margin-bottom:4px}
+.vfld input{width:100%;min-height:48px;border:1px solid #9C9083;border-radius:12px;padding:8px 14px;font-size:18px;outline:none}
+.vfld input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-l)}
+.vmsg{color:var(--accent-d);font-size:16px;min-height:1.5em;margin:4px 0}
+@media (max-width:760px){.video-wrap .vbox,.video-wrap iframe{width:100%}}

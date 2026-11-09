@@ -16,6 +16,7 @@ const store = {
 const sb = supabase.createClient(CFG.url, CFG.key, { auth: { storage: store, persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
 
 const S = { uid: null, role: null, me: null };
+const BUCKET = 'note-images';   // 照片的檔案空間：班級id/學生id/筆記id/檔名
 
 /* ---------- 小工具 ---------- */
 function toast(m) { const t = $('#appToast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 2800); }
@@ -608,8 +609,13 @@ async function viewSettings(cls, data, head) {
     <div class="box">
       <h3>${cls.archived ? '取消封存' : '學期結束：封存班級'}</h3>
       <p class="d">${cls.archived ? '取消封存後，學生又可以新增和修改筆記。' : '封存後，學生不能再新增或修改這個班級的筆記，但作品都會保留，老師和學生都還看得到。'}</p>
-      <button class="ab ${cls.archived ? '' : 'danger'}" id="btnArchive">${cls.archived ? '取消封存' : '封存這個班級'}</button>
+      <button class="ab ${cls.archived ? '' : 'danger'}" id="btnArchive">${ICON.archive}${cls.archived ? '取消封存' : '封存這個班級'}</button>
     </div>
+    ${cls.created_by === S.uid || S.me.is_admin ? `<div class="box danger-box">
+      <h3>刪除班級</h3>
+      <p class="d">把這個班級和全班的筆記、照片<b>永久刪除</b>，刪了就找不回來。只是學期結束的話，請用上面的「封存」。適合用在測試班或開錯的班級。</p>
+      <button class="ab danger" id="btnDelClass">${ICON.trash}刪除這個班級</button>
+    </div>` : ''}
   </div>`;
   $('#fCls').onsubmit = async e => {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
@@ -628,6 +634,27 @@ async function viewSettings(cls, data, head) {
     if (!await confirmBox('移除老師', '<p>移除後，這位老師就看不到這個班級。</p>', '移除', true)) return;
     try { await q(sb.from('class_teachers').delete().eq('class_id', cls.id).eq('teacher_id', b.dataset.rmt)); toast('已移除'); route(); } catch (e) { toast(e.message); }
   });
+  const del = $('#btnDelClass');
+  if (del) del.onclick = async () => {
+    del.disabled = true;
+    let info;
+    try { info = await callFn('manage', { action: 'delete_class', class_id: cls.id, preview: true }); }
+    catch (e) { toast(e.message); del.disabled = false; return; }
+    del.disabled = false;
+    const r = await modal(`<h2>永久刪除「${esc(cls.name)}」？</h2><form>
+      <p>會一起刪掉：全班 <b>${info.notes}</b> 篇筆記和裡面的照片、名單（${info.students} 位學生）、班級展示牆。<b>刪了就找不回來。</b></p>
+      ${info.only_here ? `<label class="chk" style="align-items:flex-start"><input type="checkbox" name="delete_students" checked style="margin-top:4px"><span>同時刪除 <b>${info.only_here}</b> 個只在這個班的學生帳號（帳號編號可以再拿來用）。<br><span style="color:var(--muted);font-size:15px">有在其他班的學生，帳號會保留。</span></span></label>` : ''}
+      <label class="fld"><span>請輸入班級名稱「${esc(cls.name)}」確認</span><input name="confirm_name" autocomplete="off" required></label>
+      <div class="actions"><button class="sbtn" data-close type="button">取消</button><button class="dbtn" type="submit">永久刪除</button></div></form>`);
+    if (!r) return;
+    if (String(r.confirm_name || '').trim() !== cls.name) { toast('班級名稱打得不一樣，沒有刪除'); return; }
+    try {
+      toast('刪除中⋯');
+      const out = await callFn('manage', { action: 'delete_class', class_id: cls.id, confirm_name: r.confirm_name.trim(), delete_students: !!r.delete_students });
+      await infoBox('已刪除', `<p>「${esc(cls.name)}」已經刪除：筆記 ${out.deleted_notes} 篇、照片 ${out.deleted_files} 張${out.deleted_students ? `、學生帳號 ${out.deleted_students} 個` : ''}。</p>`);
+      location.hash = '#/';
+    } catch (e) { toast('刪除沒有成功：' + e.message); }
+  };
   $('#btnArchive').onclick = async () => {
     if (!cls.archived && !await confirmBox('封存班級', `<p>確定要封存「${esc(cls.name)}」嗎？封存後學生只能看、不能改。之後可以再取消封存。</p>`, '封存', true)) return;
     try { await q(sb.from('classes').update({ archived: !cls.archived }).eq('id', cls.id)); toast(cls.archived ? '已取消封存' : '已封存'); route(); } catch (e) { toast(e.message); }
@@ -854,7 +881,18 @@ function renderDoc(el, html, hl) {
   // 一律清理後再顯示，避免有人塞進不安全的內容
   const frag = window.__editor ? window.__editor.sanitize(html || '') : document.createTextNode('');
   el.appendChild(frag);
-  if (!el.textContent.trim() && !el.querySelector('img,table')) el.innerHTML = '<p style="color:var(--muted)">（還沒有內容）</p>';
+  if (!el.textContent.trim() && !el.querySelector('img,table,.video-wrap')) el.innerHTML = '<p style="color:var(--muted)">（還沒有內容）</p>';
+  // 影片：先顯示封面，按了才載入播放器
+  el.querySelectorAll('.video-wrap').forEach(v => {
+    v.removeAttribute('contenteditable');
+    const spec = v.getAttribute('data-video') || '', id = spec.slice(3), box = v.querySelector('.vbox');
+    if (!box) return;
+    const src = spec.startsWith('yt:') ? `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0` : `https://drive.google.com/file/d/${id}/preview`;
+    box.setAttribute('role', 'button'); box.tabIndex = 0; box.setAttribute('aria-label', '播放影片');
+    const play = () => { const f = document.createElement('iframe'); f.src = src; f.title = '影片'; f.allow = 'autoplay; encrypted-media; picture-in-picture; fullscreen'; f.allowFullscreen = true; box.replaceWith(f); };
+    box.addEventListener('click', play);
+    box.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); play(); } });
+  });
   if (hl) {
     const w = String(hl);
     const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
@@ -870,7 +908,18 @@ function renderDoc(el, html, hl) {
 }
 async function delNote(id, back) {
   if (!await confirmBox('刪除這篇筆記', '<p>刪除後就找不回來了，確定要刪除嗎？</p>', '刪除', true)) return;
-  try { await q(sb.from('notes').delete().eq('id', id)); toast('已刪除'); location.hash = back; } catch (e) { toast('刪除沒有成功：' + e.message); }
+  try {
+    const n = await q(sb.from('notes').select('class_id,student_id').eq('id', id).maybeSingle());
+    await q(sb.from('notes').delete().eq('id', id));
+    if (n) {   // 照片一起清掉（失敗不影響刪除筆記）
+      try {
+        const dir = `${n.class_id}/${n.student_id}/${id}`;
+        const { data: files } = await sb.storage.from(BUCKET).list(dir, { limit: 1000 });
+        if (files && files.length) await sb.storage.from(BUCKET).remove(files.map(f => `${dir}/${f.name}`));
+      } catch (e) { console.warn(e); }
+    }
+    toast('已刪除'); location.hash = back;
+  } catch (e) { toast('刪除沒有成功：' + e.message); }
 }
 
 /* ---------- 編輯頁 ---------- */
@@ -898,6 +947,13 @@ async function viewEditor(id) {
     afterSubmit: () => { closeEditor(); toast('送出成功！已經放到你的學習紀錄頁'); location.hash = `#/c/${cls.id}`; },
     onBack: () => { closeEditor(); location.hash = `#/c/${cls.id}`; },
     onPreview: d => showPreview(d),
+    onUpload: async (blob, name) => {
+      const ext = /png/.test(blob.type) ? 'png' : /gif/.test(blob.type) ? 'gif' : /webp/.test(blob.type) ? 'webp' : 'jpg';
+      const path = `${cls.id}/${S.uid}/${n.id}/${name || crypto.randomUUID()}.${ext}`;
+      const { error } = await sb.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || 'image/jpeg', cacheControl: '31536000', upsert: false });
+      if (error && !/exist|duplicate/i.test(error.message || '')) throw error;
+      return sb.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+    },
   });
 }
 function closeEditor() {

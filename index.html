@@ -9,8 +9,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/editor.css?v=20261109b">
-<link rel="stylesheet" href="css/app.css?v=20261109b">
+<link rel="stylesheet" href="css/editor.css?v=20261109c">
+<link rel="stylesheet" href="css/app.css?v=20261109c">
 <style>
 #appPreview{position:fixed;inset:0;z-index:35;overflow:auto;background:var(--bg)}
 #appPreview[hidden],#app[hidden]{display:none}
@@ -87,6 +87,7 @@
       <!-- 插入 -->
       <div class="panel" id="p-insert">
         <button class="btn lbl" data-cmd="pickImage" title="從這台裝置插入圖片" type="button"><i data-icon="image"></i>圖片</button>
+        <button class="btn lbl" data-cmd="insertVideo" title="貼上 YouTube 或雲端硬碟的影片連結" type="button"><i data-icon="video"></i>影片</button>
         <button class="btn lbl" data-pop="popTable" title="插入表格" type="button"><i data-icon="table"></i>表格<i data-icon="chev"></i></button>
       </div>
 
@@ -196,7 +197,8 @@
     </table>
     <h3>小提醒</h3>
     <ul>
-      <li><b>圖片</b>：「插入」→「圖片」，或直接把截圖貼上、把圖片拖進來。點一下圖片，上方會出現「圖片格式」，可以調大小、靠左／置中／靠右。</li>
+      <li><b>圖片</b>：「插入」→「圖片」，或直接把截圖貼上、把圖片拖進來。照片會自動縮小後存到學校的雲端空間。點一下圖片，上方會出現「圖片格式」，可以調大小、靠左／置中／靠右。</li>
+      <li><b>影片</b>：「插入」→「影片」，貼上 YouTube 或 Google 雲端硬碟的影片連結。雲端硬碟的影片要設成「知道連結的任何人都能查看」。要刪掉影片，點一下影片再按 <kbd>Delete</kbd>。</li>
       <li><b>表格</b>：「插入」→「表格」，用滑鼠選要幾欄幾列。游標在表格裡時，上方會出現「表格版面配置」，可以加列、加欄、刪除。在最後一格按 <kbd>Tab</kbd> 會自動多一列。</li>
       <li><b>項目符號、編號</b>：在項目裡按 <kbd>Tab</kbd> 變成下一層，<kbd>Shift</kbd> + <kbd>Tab</kbd> 回上一層。</li>
       <li><b>字型</b>：Chromebook 只有黑體和明體兩種中文字型，沒有標楷體。</li>
@@ -207,6 +209,17 @@
       <li><b>公開</b>：送出後，到這篇筆記的頁面按「申請公開」。老師通過後，筆記會放到班級展示牆，家長也看得到。</li>
     </ul>
     <div class="actions"><button class="pbtn" data-close type="button">知道了</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="videoModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="videoTitle" style="max-width:600px">
+    <h2 id="videoTitle">插入影片</h2>
+    <p>貼上 <b>YouTube</b> 影片網址，或 <b>Google 雲端硬碟</b>影片的分享連結。</p>
+    <label class="vfld"><span>影片網址</span><input id="videoUrl" type="url" placeholder="例如：https://youtu.be/⋯" autocomplete="off"></label>
+    <p class="vmsg" id="videoMsg" role="alert"></p>
+    <p style="color:var(--muted);font-size:16px">雲端硬碟的影片，請先在雲端硬碟按「共用」，設成「知道連結的任何人都能查看」，老師和家長才看得到。</p>
+    <div class="actions"><button class="sbtn" data-close type="button">取消</button><button class="pbtn" id="videoOk" type="button">插入</button></div>
   </div>
 </div>
 
@@ -226,8 +239,8 @@
 
 <script src="js/vendor/supabase.js"></script>
 <script src="js/vendor/qrcode.min.js"></script>
-<script src="js/config.js?v=20261109b"></script>
-<script src="js/editor.js?v=20261109b"></script>
-<script src="js/app.js?v=20261109b"></script>
+<script src="js/config.js?v=20261109c"></script>
+<script src="js/editor.js?v=20261109c"></script>
+<script src="js/app.js?v=20261109c"></script>
 </body>
 </html>

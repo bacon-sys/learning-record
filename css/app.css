@@ -408,3 +408,7 @@ mark{background:#FFE79A;color:inherit;border-radius:3px;padding:0 2px}
   .sheet{border:none;width:auto;padding:0}
   @page{size:A4;margin:12mm}
 }
+
+/* ===== 第三階段 3-2：刪除班級 ===== */
+.danger-box{border-color:#EBC6BB}
+.danger-box h3{color:var(--primary-h)}
