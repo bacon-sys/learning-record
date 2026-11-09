@@ -307,6 +307,69 @@ mark{background:#FFE79A;color:inherit;border-radius:3px;padding:0 2px}
 .pbtn:hover{background:var(--primary-h)!important}
 .sbtn{border-color:var(--btn-line)!important}
 
+
+/* ===== 第三階段 3-1：公開與審核 ===== */
+.wk.wait{background:var(--honey-l);color:var(--honey)}
+.wk.pub{background:var(--lilac-l);color:var(--lilac)}
+.wk.rej{background:var(--primary-l);color:var(--primary-h)}
+.cfoot .tags{display:flex;gap:8px;flex-wrap:wrap}
+.cfoot{flex-wrap:wrap}
+.ctabs .cnt{display:inline-grid;place-items:center;min-width:24px;height:24px;padding:0 6px;margin-left:8px;border-radius:999px;background:var(--honey-l);color:var(--honey);font-size:14px;font-weight:700}
+.sec-head .meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+
+.share-box{display:flex;align-items:center;gap:16px;border-radius:var(--r-card);padding:16px 20px;margin:0 0 16px;border:1px solid var(--line);background:var(--card);flex-wrap:wrap}
+.share-box>svg{width:24px;height:24px;flex:none}
+.share-box .sx{flex:1;min-width:220px;display:flex;flex-direction:column}
+.share-box .sx b{font-size:18px}
+.share-box .sx span{font-size:16px;color:var(--ink-2)}
+.share-box .sa{display:flex;gap:8px;flex-wrap:wrap}
+.share-box.s-none>svg{color:var(--ink-2)}
+.share-box.s-pending{background:var(--honey-l);border-color:#F1E0B8} .share-box.s-pending>svg,.share-box.s-pending b{color:var(--honey)}
+.share-box.s-approved{background:var(--lilac-l);border-color:#DDD6F0} .share-box.s-approved>svg,.share-box.s-approved b{color:var(--lilac)}
+.share-box.s-rejected{background:var(--primary-l);border-color:#F2D3C8} .share-box.s-rejected>svg,.share-box.s-rejected b{color:var(--primary-h)}
+
+.wall-box{display:flex;gap:24px;align-items:center}
+.wall-box .wl{flex:1;min-width:0}
+.wall-box h3{display:flex;align-items:center;gap:8px}
+.wall-box h3 svg{color:var(--lilac)}
+.url-row{display:flex;gap:8px;flex-wrap:wrap}
+.url-row .url{flex:1;min-width:200px;min-height:44px;border:1px solid var(--field);border-radius:var(--r-sm);padding:0 14px;font-size:16px;background:var(--soft);color:var(--ink);font-family:"Roboto Mono",ui-monospace,monospace}
+.wall-box .wq{width:150px;flex:none;text-align:center;font-size:14px;color:var(--ink-2)}
+.wall-box .wq svg{width:150px;height:150px;display:block;margin-bottom:4px}
+.rv-list{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);overflow:hidden}
+.rv{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.rv:last-child{border-bottom:none}
+.rv .rvm{flex:1;min-width:200px;display:flex;flex-direction:column;line-height:1.5}
+.rv .rvm b{font-size:18px}
+.rv .rvm span{font-size:15px;color:var(--ink-2)}
+.rv .rva{display:flex;gap:8px;flex-wrap:wrap}
+
+/* 展示牆 QR code 列印（一頁 4 張） */
+.wsheet{grid-template-columns:1fr 1fr;gap:16px}
+.wc{border:1.5px dashed #BDB3A8;border-radius:12px;padding:20px 16px;text-align:center;break-inside:avoid;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:470px;justify-content:center}
+.wc .school{font-size:13px;color:var(--ink-2)}
+.wc .wct{font-size:22px;font-weight:700}
+.wc .wcs{font-size:16px;font-weight:700;color:var(--primary-h);letter-spacing:.1em}
+.wc .wcq svg{width:190px;height:190px;display:block;margin:8px auto}
+.wc .wcd{font-size:15px;line-height:1.6;max-width:260px}
+.wc .wcu{font-size:10px;color:var(--ink-2);word-break:break-all;font-family:"Roboto Mono",ui-monospace,monospace;margin-top:4px}
+
+/* 公開頁 */
+.pub-school{font-size:16px;color:var(--ink-2);white-space:nowrap}
+.wall-av{background:#fff!important;border-color:#fff}
+.wall-av svg{width:46px;height:46px}
+.by{display:flex;align-items:center;gap:8px;font-size:16px;color:var(--ink);font-weight:500}
+.by .mini-av{width:28px;height:28px;font-size:14px}
+.cb .by{margin-bottom:4px}
+@media (max-width:760px){
+  .wall-box{flex-direction:column;align-items:stretch}
+  .wall-box .wq{align-self:center}
+  .pub-school{display:none}
+  .rv .rva{width:100%}
+  .wsheet{grid-template-columns:1fr}
+}
+@media print{ .wsheet{grid-template-columns:1fr 1fr;gap:6mm} .wc{min-height:0;height:124mm} }
+
 /* ===== 平板／手機 ===== */
 @media (max-width:960px){
   .stats{grid-template-columns:repeat(2,1fr)}
@@ -339,7 +402,7 @@ mark{background:#FFE79A;color:inherit;border-radius:3px;padding:0 2px}
   .preview-bar .in{padding:8px 20px}
 }
 @media print{
-  .top,.print-bar,.no-print{display:none!important}
+  .top,.print-bar,.no-print,.atoast{display:none!important}
   body{background:#fff}
   .wrap{padding:0;max-width:none}
   .sheet{border:none;width:auto;padding:0}

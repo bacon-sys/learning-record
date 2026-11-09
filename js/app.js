@@ -56,6 +56,12 @@ const ICON = {
   info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>'),
   lock: svg('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>'),
   users: svg('<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8"/>'),
+  globe: svg('<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>'),
+  hourglass: svg('<path d="M6 3h12M6 21h12M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9"/>'),
+  x: svg('<path d="M6 6l12 12M18 6 6 18"/>'),
+  copy: svg('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>'),
+  open: svg('<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'),
+  refresh: svg('<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>'),
   archive: svg('<rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9M10 13h4"/>'),
 };
 // 狀態標籤：圖示＋文字＋顏色
@@ -63,6 +69,15 @@ const tagOk = t => `<span class="wk ok">${ICON.check}${t}</span>`;
 const tagTodo = t => `<span class="wk no">${ICON.clock}${t}</span>`;
 const tagDraft = t => `<span class="wk dr">${ICON.pen}${t}</span>`;
 const tagArch = t => `<span class="wk arch">${ICON.archive}${t}</span>`;
+// 公開狀態（只有自己＝none 不顯示標籤）
+const SHARE_TAG = {
+  pending: `<span class="wk wait">${ICON.hourglass}等老師審核</span>`,
+  approved: `<span class="wk pub">${ICON.globe}已公開</span>`,
+  rejected: `<span class="wk rej">${ICON.x}沒有通過公開</span>`,
+};
+const shareTag = n => SHARE_TAG[n.share_status] || '';
+const wallHash = cls => `#/p/${cls.public_token}`;
+const wallUrl = cls => `${CFG.publicUrl}#/p/${cls.public_token}`;
 const grad = n => 'g' + (((n - 1) % 4) + 4) % 4; // 四色輪替：蜂蜜、抹茶、藕紫、天空
 const loading = (t = '載入中⋯') => { app.innerHTML = `<div class="loading">${esc(t)}</div>`; };
 
@@ -147,7 +162,7 @@ function noteCard(n, cls, link, isOwner) {
     : `<div class="thumb ${grad(wk)}"><span class="badge">${ICON.book}</span>${pill}</div>`;
   return `<button class="card ${sent ? '' : 'draft'}" data-go="${link}">${th}
     <div class="cb"><div class="cdate">第 ${wk} 週・${fmtD(n.submitted_at || n.updated_at)}</div><div class="ctitle">${esc(title)}</div><div class="cex">${esc(ex.slice(0, 120)) || '（還沒有內容）'}</div>
-    <div class="cfoot">${status}${n.word_count != null ? `<span>${n.word_count} 字</span>` : ''}</div></div></button>`;
+    <div class="cfoot"><span class="tags">${status}${shareTag(n)}</span>${n.word_count != null ? `<span>${n.word_count} 字</span>` : ''}</div></div></button>`;
 }
 
 /* ---------- 登入 ---------- */
@@ -217,7 +232,7 @@ async function viewHome() {
   const ids = classes.map(c => c.id);
   const [enr, notes, tch] = ids.length ? await Promise.all([
     q(sb.from('enrollments').select('class_id,student_id').in('class_id', ids)),
-    q(sb.from('notes').select('class_id,student_id,first_submitted_at,submitted_at,created_at').in('class_id', ids)),
+    q(sb.from('notes').select('class_id,student_id,first_submitted_at,submitted_at,created_at,share_status').in('class_id', ids)),
     q(sb.from('class_teachers').select('class_id,teacher:teachers(display_name)').in('class_id', ids)),
   ]) : [[], [], []];
   const card = c => {
@@ -225,10 +240,11 @@ async function viewHome() {
     const cn = notes.filter(x => x.class_id === c.id);
     const wk = curWeek(c);
     const done = new Set(cn.filter(x => x.first_submitted_at && weekNo(c, x.first_submitted_at) === wk).map(x => x.student_id)).size;
+    const pend = cn.filter(x => x.share_status === 'pending').length;
     const names = tch.filter(t => t.class_id === c.id).map(t => t.teacher?.display_name).filter(Boolean).join('、');
     return `<button class="class-card" data-go="#/c/${c.id}"><div class="band ${c.archived ? 'arch' : (/八/.test(c.name) ? 'c8' : 'c7')}"></div><div class="ci">
       <div class="cn">${esc(c.name)}</div><div class="cm">${n} 位學生・${esc(names)}</div>
-      ${c.archived ? `<div class="stat">${tagArch('已封存・作品保留')}</div>` : `<div class="stat"><span>本週已送出 <b>${done}</b>/${n}</span><span>共 <b>${cn.filter(x => x.submitted_at).length}</b> 篇</span></div>`}</div></button>`;
+      ${c.archived ? `<div class="stat">${tagArch('已封存・作品保留')}</div>` : `<div class="stat"><span>本週已送出 <b>${done}</b>/${n}</span><span>共 <b>${cn.filter(x => x.submitted_at).length}</b> 篇</span>${pend ? `<span class="wk wait">${ICON.hourglass}${pend} 篇等審核</span>` : ''}</div>`}</div></button>`;
   };
   const open = classes.filter(c => !c.archived), arch = classes.filter(c => c.archived);
   app.innerHTML = topbar([['我的班級']]) + `
@@ -294,7 +310,7 @@ async function viewClass(cid, tab, sid) {
 async function viewMyBlog(cls) {
   const [enr, notes] = await Promise.all([
     q(sb.from('enrollments').select('seat_no').eq('class_id', cls.id).eq('student_id', S.uid).maybeSingle()),
-    q(sb.from('notes').select('id,title,sub_title,content_text,sub_text,created_at,updated_at,submitted_at,first_submitted_at,cover_url,word_count').eq('class_id', cls.id).eq('student_id', S.uid).order('created_at', { ascending: false })),
+    q(sb.from('notes').select('id,title,sub_title,content_text,sub_text,created_at,updated_at,submitted_at,first_submitted_at,cover_url,word_count,share_status').eq('class_id', cls.id).eq('student_id', S.uid).order('created_at', { ascending: false })),
   ]);
   const me = { id: S.uid, display_name: S.me.display_name, seat_no: enr?.seat_no };
   const sent = notes.filter(n => n.submitted_at).length;
@@ -302,7 +318,7 @@ async function viewMyBlog(cls) {
   app.innerHTML = topbar([[cls.name]]) + `
   <div class="wrap narrow">
     ${blogHead(me, cls, act)}
-    <div class="sec-head"><h2>我的學習筆記</h2><span class="meta">已送出 ${sent} 篇・草稿 ${notes.length - sent} 篇</span></div>
+    <div class="sec-head"><h2>我的學習筆記</h2><span class="meta">已送出 ${sent} 篇・草稿 ${notes.length - sent} 篇　<a class="ab sm" href="${wallHash(cls)}">${ICON.globe}班級展示牆</a></span></div>
     ${notes.length ? `<div class="searchbar"><input id="searchBox" placeholder="搜尋我寫過的詞，例如：菱形紋" autocomplete="off"></div>` : ''}
     <div id="noteArea">${notes.length ? `<div class="cards">${notes.map(n => noteCard(n, cls, n.submitted_at ? `#/n/${n.id}` : `#/e/${n.id}`, true)).join('')}</div>`
       : `<div class="empty"><b>還沒有筆記</b>${cls.archived ? '' : '按上面的「寫新的筆記」開始寫第一篇。'}</div>`}</div>
@@ -347,7 +363,7 @@ async function newNote(cid) {
 async function loadClassData(cls) {
   const [enr, notes, tch, guard] = await Promise.all([
     q(sb.from('enrollments').select('seat_no, student:students(*)').eq('class_id', cls.id)),
-    q(sb.from('notes').select('id,student_id,title,sub_title,sub_text,content_text,created_at,updated_at,submitted_at,first_submitted_at,cover_url,word_count,hidden_by_teacher').eq('class_id', cls.id).order('created_at', { ascending: false })),
+    q(sb.from('notes').select('id,student_id,title,sub_title,sub_text,content_text,created_at,updated_at,submitted_at,first_submitted_at,cover_url,word_count,hidden_by_teacher,share_status').eq('class_id', cls.id).order('created_at', { ascending: false })),
     q(sb.from('class_teachers').select('teacher:teachers(id,display_name,email)').eq('class_id', cls.id)),
     q(sb.from('login_guard').select('account,locked_until')),
   ]);
@@ -359,7 +375,8 @@ const pct = (a, b) => (b ? Math.min(100, a / b * 100) : 0);
 const statCard = (icon, tone, label, value, unit, p) => `<div class="stat-card"><div class="k"><span class="ic ${tone}">${ICON[icon]}</span>${label}</div>
   <div class="v">${value}<small>${unit}</small></div><div class="bar ${tone}"><i style="width:${p}%"></i></div></div>`;
 function classHeader(cls, data, tab) {
-  const tabs = [['blogs', '學生部落格'], ['progress', '進度一覽'], ['roster', '名單與帳號'], ['settings', '班級設定']];
+  const pendN = data.notes.filter(n => n.share_status === 'pending').length;
+  const tabs = [['blogs', '學生部落格'], ['progress', '進度一覽'], ['share', `公開審核${pendN ? `<span class="cnt">${pendN}</span>` : ''}`], ['roster', '名單與帳號'], ['settings', '班級設定']];
   const wk = curWeek(cls);
   const st = data.students.map(s => weekStatus(cls, data.notes.filter(n => n.student_id === s.id), wk));
   const total = data.students.length || 0;
@@ -428,6 +445,7 @@ async function viewTeacherClass(cls, tab) {
     </div>`;
     return;
   }
+  if (tab === 'share') return viewShare(cls, data, head);
   if (tab === 'roster') return viewRoster(cls, data, head);
   if (tab === 'settings') return viewSettings(cls, data, head);
 }
@@ -675,6 +693,7 @@ async function viewNote(id, params) {
       ${isOwner && !cls.archived ? `<span class="acts"><a class="ab sm" href="#/e/${n.id}">${ICON.pen}修改</a><button class="ab sm danger" data-act="delNote" data-id="${n.id}" data-back="${back}">${ICON.trash}刪除</button></span>` : ''}</div>
     ${showDraft ? `<div class="note-banner">${ICON.pen}<span>這篇還是<b>草稿</b>，還沒送出${isOwner ? '' : '（學生還在寫）'}。</span></div>` : ''}
     ${!showDraft && hasUnsent(n) ? `<div class="note-banner">${ICON.info}<span>${isOwner ? '你有修改還沒送出。這裡顯示的是上次送出的版本。' : '學生有新的修改還沒送出；這裡顯示的是上次送出的版本。'}</span></div>` : ''}
+    ${sharePanel(n, cls, isOwner)}
     <article class="post">
       <div class="post-meta"><span class="tag">${ICON.book}學習筆記</span><span>第 ${Math.max(1, weekNo(cls, n.first_submitted_at || n.created_at))} 週・${fmtFull(n.submitted_at || n.updated_at)}</span><span>·</span><span>${n.word_count} 字</span></div>
       <h1 class="post-title">${esc(title)}</h1>
@@ -683,6 +702,153 @@ async function viewNote(id, params) {
   </div>`;
   renderDoc($('#postBody'), html, params.hl);
 }
+function sharePanel(n, cls, isOwner) {
+  const st = n.submitted_at ? n.share_status : 'unsent';
+  const btn = (to, label, pri) => cls.archived ? '' : `<button class="ab sm ${pri ? 'pri' : ''}" data-act="share" data-to="${to}" data-id="${n.id}">${label}</button>`;
+  const wall = `<a class="ab sm" href="${wallHash(cls)}">${ICON.globe}看班級展示牆</a>`;
+  const T = isOwner ? {
+    unsent: ['none', ICON.lock, '只有你和老師看得到', '送出之後，可以申請公開到班級展示牆。', ''],
+    none: ['none', ICON.lock, '只有你和老師看得到', '想讓家長和大家看到，可以申請公開；老師通過後，會放到班級展示牆。', btn('pending', `${ICON.globe}申請公開`, true)],
+    pending: ['pending', ICON.hourglass, '已申請公開，等老師審核', '老師通過後，就會出現在班級展示牆。', btn('none', '取消申請')],
+    approved: ['approved', ICON.globe, '已公開在班級展示牆', '家長和拿到展示牆網址的人都看得到。之後再修改送出，要重新等老師審核。', wall + btn('none', '不公開了')],
+    rejected: ['rejected', ICON.x, '老師沒有通過公開申請', '可以修改後再申請一次。', btn('pending', '再申請一次')],
+  } : {
+    unsent: ['none', ICON.lock, '只有學生和老師看得到', '還沒送出。', ''],
+    none: ['none', ICON.lock, '只有學生和老師看得到', '學生沒有申請公開。', ''],
+    pending: ['pending', ICON.hourglass, '學生申請公開', '通過後會放到班級展示牆，家長不用登入就看得到（顯示學生真名）。', btn('approved', `${ICON.check}通過公開`, true) + btn('rejected', '不通過')],
+    approved: ['approved', ICON.globe, '已公開在班級展示牆', '', wall + btn('none', '取消公開')],
+    rejected: ['rejected', ICON.x, '沒有通過公開', '學生可以修改後再申請。', ''],
+  };
+  const [tone, ic, title, desc, acts] = T[st] || T.none;
+  return `<div class="share-box s-${tone}">${ic}<div class="sx"><b>${title}</b>${desc ? `<span>${desc}</span>` : ''}</div>${acts ? `<div class="sa">${acts}</div>` : ''}</div>`;
+}
+const SHARE_MSG = { pending: '已申請公開，等老師審核', none: '已改成只有自己看得到', approved: '已通過，放到班級展示牆了', rejected: '已設為不通過' };
+async function setShare(id, to) {
+  try {
+    const r = await q(sb.from('notes').update({ share_status: to }).eq('id', id).select('share_status').single());
+    if (r.share_status !== to) throw new Error('狀態沒有改變，請重新整理再試一次');
+    toast(SHARE_MSG[to] || '已更新'); route();
+  } catch (e) { toast('沒有成功：' + e.message); }
+}
+
+/* ---------- 老師：公開審核 ---------- */
+function viewShare(cls, data, head) {
+  const stu = id => data.students.find(s => s.id === id) || { display_name: '?', name: '' };
+  const row = (n, acts) => { const s = stu(n.student_id); return `<div class="rv"><span class="mini-av" style="background:${colorOf(s.id)}">${esc(initial(s.display_name))}</span>
+    <div class="rvm"><b>${esc(n.sub_title || n.title || '（沒有標題）')}</b><span>${esc(s.name)}（${esc(s.display_name)}）・第 ${Math.max(1, weekNo(cls, n.first_submitted_at || n.created_at))} 週・送出 ${fmtD(n.submitted_at)}</span></div>
+    <div class="rva"><a class="ab sm" href="#/n/${n.id}">看內容</a>${acts(n)}</div></div>`; };
+  const by = st => data.notes.filter(n => n.share_status === st).sort((a, b) => (b.submitted_at > a.submitted_at ? 1 : -1));
+  const pending = by('pending'), pub = by('approved'), rej = by('rejected');
+  const url = wallUrl(cls);
+  const ro = cls.archived;
+  app.innerHTML = head + `
+    <div class="box wall-box"><div class="wl">
+      <h3>${ICON.globe} 班級展示牆網址</h3>
+      <p class="d">家長不用登入，打開網址就能看全班「已公開」的筆記，顯示學生真名。網址裡有一串猜不到的代碼，也設定不讓 Google 搜尋到。</p>
+      <div class="url-row"><input class="url" readonly value="${esc(url)}" id="wallUrl" aria-label="班級展示牆網址"><button class="ab sm" id="btnCopy">${ICON.copy}複製</button><a class="ab sm" href="${wallHash(cls)}">${ICON.open}開啟</a></div>
+      <div class="row-act"><a class="ab sm" href="#/c/${cls.id}/wallcard">${ICON.print}印 QR code 給家長</a>
+        <button class="ab sm danger" id="btnNewToken">${ICON.refresh}換一個網址</button></div>
+    </div><div class="wq">${qrSVG(url)}<span>掃描看展示牆</span></div></div>
+
+    <div class="sec-head"><h2>等老師審核（${pending.length}）</h2>${ro ? tagArch('班級已封存') : ''}</div>
+    ${pending.length ? `<div class="rv-list">${pending.map(n => row(n, n => ro ? '' : `<button class="ab sm pri" data-act="share" data-to="approved" data-id="${n.id}">${ICON.check}通過</button><button class="ab sm" data-act="share" data-to="rejected" data-id="${n.id}">不通過</button>`)).join('')}</div>`
+      : '<div class="empty">目前沒有要審核的筆記。</div>'}
+    <div class="sec-head"><h2>已公開（${pub.length}）</h2></div>
+    ${pub.length ? `<div class="rv-list">${pub.map(n => row(n, n => ro ? '' : `<button class="ab sm" data-act="share" data-to="none" data-id="${n.id}">取消公開</button>`)).join('')}</div>`
+      : '<div class="empty">還沒有公開的筆記。</div>'}
+    ${rej.length ? `<div class="sec-head"><h2>沒有通過（${rej.length}）</h2><span class="meta">學生修改後可以再申請</span></div><div class="rv-list">${rej.map(n => row(n, () => '')).join('')}</div>` : ''}
+  </div>`;
+  $('#btnCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(url); toast('網址已複製'); }
+    catch (e) { const i = $('#wallUrl'); i.select(); document.execCommand('copy'); toast('網址已複製'); }
+  };
+  $('#btnNewToken').onclick = async () => {
+    if (!await confirmBox('換一個展示牆網址', '<p>換了以後，<b>舊的網址和 QR code 就打不開了</b>，要把新網址重新發給家長。網址外流時才需要換。</p>', '換網址', true)) return;
+    try { await q(sb.from('classes').update({ public_token: crypto.randomUUID() }).eq('id', cls.id)); toast('已換成新網址'); route(); }
+    catch (e) { toast('沒有成功：' + e.message); }
+  };
+}
+async function viewWallCard(cid) {
+  loading();
+  const cls = await loadClass(cid);
+  const url = wallUrl(cls);
+  const one = `<div class="wc"><div class="school">${esc(CFG.school)}・${esc(CFG.site)}</div><div class="wct">${esc(cls.name)}</div><div class="wcs">班級展示牆</div>
+    <div class="wcq">${qrSVG(url)}</div><div class="wcd">用手機相機掃描 QR code，就能看到孩子們公開的學習筆記，不用登入。</div><div class="wcu">${esc(url)}</div></div>`;
+  app.innerHTML = topbar([['我的班級', '#/'], [cls.name, `#/c/${cls.id}/share`], ['展示牆 QR code']]) + `
+  <div class="wrap">
+    <div class="print-bar"><h1 class="pg" style="margin:0">展示牆 QR code</h1><span class="sp" style="flex:1"></span>
+      <a class="back-link" href="#/c/${cls.id}/share">${ICON.back}回到公開審核</a>
+      <button class="ab dark" data-act="print">${ICON.print}列印（A4，一頁 4 張）</button></div>
+    <p class="sub no-print">剪下來發給家長，或貼在聯絡簿上。</p>
+    <div class="sheet wsheet">${one.repeat(4)}</div>
+  </div>`;
+}
+
+/* ---------- 公開頁（免登入）：班級展示牆、公開的筆記 ---------- */
+const avatarOfKey = k => COLORS[parseInt(String(k).slice(0, 6), 16) % COLORS.length];
+function publicTop(token, label) {
+  return `<header class="top"><div class="top-in">
+    <a class="abrand" href="#/p/${esc(token)}" title="${esc(CFG.site)}"><span class="logo">${logo}</span><span class="bt">${esc(CFG.site)}</span></a>
+    <nav class="crumb" aria-label="目前位置"><span class="cp on" aria-current="page">${esc(label)}</span></nav>
+    <span class="sp"></span>
+    ${S.uid ? `<a class="link" href="#/">${ICON.back}<span class="wn">回到我的班級</span></a>` : `<span class="pub-school">${esc(CFG.school)}</span>`}
+  </div></header>`;
+}
+function publicMissing(token) {
+  app.innerHTML = publicTop(token, '班級展示牆') + `<div class="wrap read"><div class="empty"><b>找不到這個頁面</b>網址可能已經換了，或這篇筆記已經不公開。請向老師索取新的網址。</div></div>`;
+}
+async function viewPublicWall(token) {
+  loading();
+  const { data, error } = await sb.rpc('public_wall', { token });
+  if (error || !data) return publicMissing(token);
+  const cls = data.class, notes = data.notes || [];
+  document.title = `${cls.name}・班級展示牆｜${CFG.site}`;
+  const kids = [];
+  for (const n of notes) if (!kids.find(k => k.key === n.student_key)) kids.push({ key: n.student_key, name: n.name, seat: n.seat_no ?? 999 });
+  kids.sort((a, b) => a.seat - b.seat);
+  const card = n => {
+    const wk = Math.max(1, weekNo(cls, n.first_submitted_at));
+    const pill = `<span class="pill">第 ${wk} 週</span>`;
+    const th = n.cover_url ? `<div class="thumb img" style="background-image:url('${esc(n.cover_url)}')">${pill}</div>` : `<div class="thumb ${grad(wk)}"><span class="badge">${ICON.book}</span>${pill}</div>`;
+    return `<button class="card" data-go="#/p/${esc(token)}/${n.id}" data-k="${n.student_key}">${th}<div class="cb">
+      <div class="by"><span class="mini-av" style="background:${avatarOfKey(n.student_key)}">${esc(initial(n.name))}</span>${esc(n.name)}</div>
+      <div class="ctitle">${esc(n.title || '（沒有標題）')}</div><div class="cex">${esc(n.excerpt || '')}</div>
+      <div class="cfoot"><span>第 ${wk} 週・${fmtD(n.first_submitted_at)}</span><span>${n.word_count} 字</span></div></div></button>`;
+  };
+  app.innerHTML = publicTop(token, '班級展示牆') + `
+  <div class="wrap">
+    <section class="blog-head"><div class="cover"></div><div class="profile">
+      <div class="avatar wall-av">${logo}</div>
+      <div class="who"><div class="blog-name">${esc(cls.name)}・班級展示牆</div><div class="blog-sub">${esc(CFG.school)}${cls.term ? '・' + esc(cls.term) : ''}・公開的學習筆記 ${notes.length} 篇</div></div>
+    </div></section>
+    ${notes.length ? `<div class="filters" style="margin-top:24px"><button class="chip on" data-k="">全部</button>${kids.map(k => `<button class="chip" data-k="${k.key}">${esc(k.name)}</button>`).join('')}</div>
+      <div class="cards" id="wallCards">${notes.map(card).join('')}</div>`
+      : '<div class="empty" style="margin-top:24px"><b>還沒有公開的筆記</b>學生申請公開、老師通過後，就會出現在這裡。</div>'}
+  </div>`;
+  app.querySelectorAll('.chip[data-k]').forEach(b => b.onclick = () => {
+    app.querySelectorAll('.chip[data-k]').forEach(x => x.classList.toggle('on', x === b));
+    app.querySelectorAll('#wallCards .card').forEach(c => { c.hidden = !!b.dataset.k && c.dataset.k !== b.dataset.k; });
+  });
+}
+async function viewPublicNote(token, id) {
+  loading();
+  const { data, error } = await sb.rpc('public_note', { token, note: id });
+  if (error || !data) return publicMissing(token);
+  const cls = data.class, n = data.note;
+  document.title = `${n.title || '學習筆記'}｜${cls.name}`;
+  app.innerHTML = publicTop(token, '班級展示牆') + `
+  <div class="wrap read">
+    <div class="post-bar"><a class="back-link" href="#/p/${esc(token)}">${ICON.back}回到 ${esc(cls.name)} 班級展示牆</a></div>
+    <article class="post">
+      <div class="post-meta"><span class="tag">${ICON.book}學習筆記</span><span class="by"><span class="mini-av" style="background:${avatarOfKey(n.student_key)}">${esc(initial(n.name))}</span>${esc(n.name)}</span>
+        <span>第 ${Math.max(1, weekNo(cls, n.first_submitted_at))} 週・${fmtFull(n.submitted_at)}</span><span>·</span><span>${n.word_count} 字</span></div>
+      <h1 class="post-title">${esc(n.title || '（沒有標題）')}</h1>
+      <div class="doc post-body" id="postBody"></div>
+    </article>
+  </div>`;
+  renderDoc($('#postBody'), n.html);
+}
+
 function renderDoc(el, html, hl) {
   el.innerHTML = '';
   // 一律清理後再顯示，避免有人塞進不安全的內容
@@ -814,6 +980,12 @@ function parseHash() {
 async function route() {
   const { parts, params } = parseHash();
   if (editing && parts[0] !== 'e') { await window.LREditor.flush(); closeEditor(); }
+  if (parts[0] === 'p' && parts[1]) {   // 公開頁：不用登入
+    window.scrollTo(0, 0);
+    try { return parts[2] ? await viewPublicNote(parts[1], parts[2]) : await viewPublicWall(parts[1]); }
+    catch (e) { console.error(e); return publicMissing(parts[1]); }
+  }
+  document.title = CFG.site;
   if (!S.uid) { if (parts[0] !== 'login') { history.replaceState(null, '', location.pathname + '#/login' + (params.u ? `?u=${params.u}&p=${params.p}` : '')); } return viewLogin(params); }
   window.scrollTo(0, 0);
   try {
@@ -821,6 +993,7 @@ async function route() {
     if (!parts.length) return await viewHome();
     if (parts[0] === 'c' && parts[1]) {
       if (parts[2] === 'cards') return await viewCards(parts[1], params);
+      if (parts[2] === 'wallcard') return await viewWallCard(parts[1]);
       if (parts[2] === 's' && parts[3]) return await viewClass(parts[1], null, parts[3]);
       return await viewClass(parts[1], parts[2]);
     }
@@ -846,6 +1019,7 @@ document.addEventListener('click', async e => {
   else if (act === 'newClass') newClass();
   else if (act === 'newNote') { a.disabled = true; newNote(a.dataset.cid); }
   else if (act === 'delNote') delNote(a.dataset.id, a.dataset.back);
+  else if (act === 'share') { a.disabled = true; setShare(a.dataset.id, a.dataset.to); }
   else if (act === 'print') { window.print(); }
   else if (act === 'reload') location.reload();
 });
