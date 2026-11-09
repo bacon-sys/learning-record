@@ -162,3 +162,5 @@ kbd{display:inline-block;border:1px solid #CFC6BB;border-bottom-width:3px;border
   .workspace{overflow:visible;padding:0}
   .page{box-shadow:none;zoom:1!important;width:auto;min-height:0;padding:0}
 }
+#editorView .topline .link-btn,#editorView .topline .pv-btn,#editorView .tab{white-space:nowrap}
+@media (max-width:900px){#editorView .topline .full{display:none}}

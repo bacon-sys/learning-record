@@ -249,3 +249,5 @@ mark{background:#FFE79A;color:inherit;border-radius:3px;padding:0 2px}
 .modal .fld{margin-bottom:12px}
 .card-hidden{opacity:.55}
 @media (max-width:760px){.post-body.doc{zoom:1.02}}
+a.ab{text-decoration:none;color:inherit}
+a.ab.dark,a.ab.pri{color:#fff}
