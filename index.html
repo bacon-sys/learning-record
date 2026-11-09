@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>專題學習紀錄</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 22 12 12 22 2 12Z' fill='%23C0675A'/%3E%3Cpath d='M12 8 16 12 12 16 8 12Z' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/editor.css">
+<link rel="stylesheet" href="css/app.css">
+<style>
+#appPreview{position:fixed;inset:0;z-index:35;overflow:auto;background:var(--bg)}
+#appPreview[hidden],#app[hidden]{display:none}
+</style>
+</head>
+<body>
+<div id="app"><div class="loading">載入中⋯</div></div>
+<div id="appPreview" hidden></div>
+
+<!-- ===== 編輯頁（仿 Word） ===== -->
+<section id="editorView" hidden>
+<header class="appbar">
+  <div class="appbar-in">
+    <div class="topline">
+      <button class="link-btn back-btn" id="btnBack" type="button" title="存好並回到學習紀錄頁"><i data-icon="back"></i><span class="full">學習紀錄頁</span></button>
+      <nav class="tabs" id="tabs">
+        <button class="tab on" data-tab="home" type="button">常用</button>
+        <button class="tab" data-tab="insert" type="button">插入</button>
+        <button class="tab ctx" data-tab="table" type="button" hidden>表格版面配置</button>
+        <button class="tab ctx" data-tab="image" type="button" hidden>圖片格式</button>
+      </nav>
+      <span class="sp"></span>
+      <button class="link-btn pv2" id="btnPreview" type="button" title="看看送出後的樣子"><i data-icon="eye"></i>預覽</button>
+      <button class="pv-btn" id="btnSubmit" type="button" title="送出到我的學習紀錄頁"><i data-icon="send"></i><span id="submitLabel">送出</span></button>
+      <button class="link-btn" id="btnHelp" type="button"><i data-icon="help"></i>使用說明</button>
+    </div>
+
+    <div class="ribbon" id="ribbon">
+      <!-- 常用 -->
+      <div class="panel on" id="p-home">
+        <button class="btn" data-cmd="undo" title="復原（Ctrl+Z）" type="button"><i data-icon="undo"></i></button>
+        <button class="btn" data-cmd="redo" title="重做（Ctrl+Y）" type="button"><i data-icon="redo"></i></button>
+        <span class="sep"></span>
+        <button class="combo style-combo" data-pop="popStyle" title="樣式" type="button"><span id="styleLabel">內文</span><i data-icon="chev"></i></button>
+        <button class="combo font-combo" data-pop="popFont" title="字型" type="button"><span id="fontLabel">黑體</span><i data-icon="chev"></i></button>
+        <div class="size-combo" title="字型大小">
+          <input id="sizeInput" value="12" inputmode="decimal" autocomplete="off" aria-label="字型大小">
+          <button class="btn arrow" data-pop="popSize" type="button" aria-label="字型大小清單"><i data-icon="chev"></i></button>
+        </div>
+        <button class="btn" data-cmd="grow" title="放大字型（Ctrl+Shift+>）" type="button"><span class="t-grow">A<small>▲</small></span></button>
+        <button class="btn" data-cmd="shrink" title="縮小字型（Ctrl+Shift+<）" type="button"><span class="t-shrink">A<small>▼</small></span></button>
+        <span class="sep"></span>
+        <button class="btn" data-cmd="bold" data-state="bold" title="粗體（Ctrl+B）" type="button"><span class="t-b">B</span></button>
+        <button class="btn" data-cmd="italic" data-state="italic" title="斜體（Ctrl+I）" type="button"><span class="t-i">I</span></button>
+        <button class="btn" data-cmd="underline" data-state="underline" title="底線（Ctrl+U）" type="button"><span class="t-u">U</span></button>
+        <button class="btn" data-cmd="strike" data-state="strikeThrough" title="刪除線" type="button"><span class="t-s">ab</span></button>
+        <span class="split">
+          <button class="btn" data-cmd="foreColor" title="字型色彩" type="button"><span class="ic-a"><b>A</b><i class="cbar" id="fcBar" style="background:#C00000"></i></span></button>
+          <button class="btn arrow" data-pop="popColor" type="button" aria-label="選擇字型色彩"><i data-icon="chev"></i></button>
+        </span>
+        <span class="split">
+          <button class="btn" data-cmd="hilite" title="文字醒目提示色彩" type="button"><span class="ic-a"><i data-icon="hilite"></i><i class="cbar" id="hiBar" style="background:#FFFF00"></i></span></button>
+          <button class="btn arrow" data-pop="popHi" type="button" aria-label="選擇醒目提示色彩"><i data-icon="chev"></i></button>
+        </span>
+        <button class="btn" data-cmd="clearFormat" title="清除所有格式設定" type="button"><i data-icon="clear"></i></button>
+        <span class="sep"></span>
+        <span class="split">
+          <button class="btn" data-cmd="ul" data-state="insertUnorderedList" title="項目符號" type="button"><i data-icon="ul"></i></button>
+          <button class="btn arrow" data-pop="popBullet" type="button" aria-label="選擇項目符號"><i data-icon="chev"></i></button>
+        </span>
+        <span class="split">
+          <button class="btn" data-cmd="ol" data-state="insertOrderedList" title="編號" type="button"><i data-icon="ol"></i></button>
+          <button class="btn arrow" data-pop="popNumber" type="button" aria-label="選擇編號格式"><i data-icon="chev"></i></button>
+        </span>
+        <button class="btn" data-cmd="outdent" title="減少縮排" type="button"><i data-icon="outdent"></i></button>
+        <button class="btn" data-cmd="indent" title="增加縮排" type="button"><i data-icon="indent"></i></button>
+        <span class="sep"></span>
+        <button class="btn" data-cmd="alignLeft" data-state="justifyLeft" title="靠左對齊" type="button"><i data-icon="al"></i></button>
+        <button class="btn" data-cmd="alignCenter" data-state="justifyCenter" title="置中" type="button"><i data-icon="ac"></i></button>
+        <button class="btn" data-cmd="alignRight" data-state="justifyRight" title="靠右對齊" type="button"><i data-icon="ar"></i></button>
+        <button class="btn" data-cmd="alignJustify" data-state="justifyFull" title="左右對齊" type="button"><i data-icon="aj"></i></button>
+      </div>
+
+      <!-- 插入 -->
+      <div class="panel" id="p-insert">
+        <button class="btn lbl" data-cmd="pickImage" title="從這台裝置插入圖片" type="button"><i data-icon="image"></i>圖片</button>
+        <button class="btn lbl" data-pop="popTable" title="插入表格" type="button"><i data-icon="table"></i>表格<i data-icon="chev"></i></button>
+      </div>
+
+      <!-- 表格版面配置（游標在表格裡才出現） -->
+      <div class="panel" id="p-table">
+        <button class="btn lbl" data-cmd="rowAbove" type="button"><i data-icon="rowAbove"></i>上方插入列</button>
+        <button class="btn lbl" data-cmd="rowBelow" type="button"><i data-icon="rowBelow"></i>下方插入列</button>
+        <button class="btn lbl" data-cmd="colLeft" type="button"><i data-icon="colLeft"></i>左側插入欄</button>
+        <button class="btn lbl" data-cmd="colRight" type="button"><i data-icon="colRight"></i>右側插入欄</button>
+        <span class="sep"></span>
+        <button class="btn lbl" data-cmd="delRow" type="button"><i data-icon="trash"></i>刪除列</button>
+        <button class="btn lbl" data-cmd="delCol" type="button"><i data-icon="trash"></i>刪除欄</button>
+        <button class="btn lbl" data-cmd="delTable" type="button"><i data-icon="trash"></i>刪除表格</button>
+      </div>
+
+      <!-- 圖片格式（點選圖片才出現） -->
+      <div class="panel" id="p-image">
+        <button class="btn lbl" data-imgw="25" type="button">小 25%</button>
+        <button class="btn lbl" data-imgw="50" type="button">中 50%</button>
+        <button class="btn lbl" data-imgw="75" type="button">大 75%</button>
+        <button class="btn lbl" data-imgw="100" type="button">滿版</button>
+        <span class="sep"></span>
+        <button class="btn" data-imga="left" title="靠左" type="button"><i data-icon="al"></i></button>
+        <button class="btn" data-imga="center" title="置中" type="button"><i data-icon="ac"></i></button>
+        <button class="btn" data-imga="right" title="靠右" type="button"><i data-icon="ar"></i></button>
+        <span class="sep"></span>
+        <button class="btn lbl" data-cmd="delImage" type="button"><i data-icon="trash"></i>刪除圖片</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="workspace" id="workspace">
+  <div class="page" id="page">
+    <div class="title-label">筆記標題</div>
+    <input class="note-title" id="noteTitle" maxlength="80" placeholder="例：第 3 週　部落編織訪談" autocomplete="off">
+    <div id="editor" class="doc" contenteditable="true" spellcheck="false" aria-label="筆記內容"><p><br></p></div>
+  </div>
+</main>
+
+<footer class="status">
+  <span id="wordCount">字數：0</span>
+  <span class="save" id="saveState">尚未編輯</span>
+  <div class="zoom">
+    <button class="zbtn" id="zoomOut" type="button" aria-label="縮小顯示">−</button>
+    <input type="range" id="zoomRange" min="50" max="200" step="10" value="120" aria-label="顯示比例">
+    <button class="zbtn" id="zoomIn" type="button" aria-label="放大顯示">+</button>
+    <span id="zoomLabel">120%</span>
+  </div>
+</footer>
+<!-- 彈出選單 -->
+<div class="pop" id="popStyle">
+  <button class="sty-item" data-block="p" type="button" style="font-size:18px">內文</button>
+  <button class="sty-item" data-block="h1" type="button" style="font-size:24px;font-weight:700">標題 1</button>
+  <button class="sty-item" data-block="h2" type="button" style="font-size:21px;font-weight:700;color:#9B5247">標題 2</button>
+  <button class="sty-item" data-block="h3" type="button" style="font-size:19px;font-weight:700;color:#5A4A3F">標題 3</button>
+</div>
+<div class="pop" id="popFont"></div>
+<div class="pop" id="popSize"></div>
+<div class="pop" id="popColor">
+  <div class="pop-title">佈景主題色彩</div><div class="sw-grid" data-kind="fore" data-set="theme"></div>
+  <div class="pop-title">標準色彩</div><div class="sw-grid" data-kind="fore" data-set="std"></div>
+  <button class="mi" data-color="#000000" type="button"><span class="sw" style="background:#000;display:inline-block"></span>自動（黑色）</button>
+</div>
+<div class="pop" id="popHi">
+  <div class="sw-grid" data-kind="hi" data-set="hi" style="grid-template-columns:repeat(5,30px)"></div>
+  <button class="mi" data-hi="none" type="button">無色彩</button>
+</div>
+<div class="pop" id="popBullet">
+  <div class="pop-title">項目符號庫</div>
+  <div class="list-opts">
+    <button class="lo" data-ul="disc" type="button"><span class="ln">●<i></i></span><span class="ln">●<i></i></span><span class="nm">實心圓</span></button>
+    <button class="lo" data-ul="circle" type="button"><span class="ln">○<i></i></span><span class="ln">○<i></i></span><span class="nm">空心圓</span></button>
+    <button class="lo" data-ul="square" type="button"><span class="ln">■<i></i></span><span class="ln">■<i></i></span><span class="nm">方塊</span></button>
+  </div>
+</div>
+<div class="pop" id="popNumber">
+  <div class="pop-title">編號庫</div>
+  <div class="list-opts">
+    <button class="lo" data-ol="decimal" type="button"><span class="ln">1.<i></i></span><span class="ln">2.<i></i></span><span class="nm">1. 2. 3.</span></button>
+    <button class="lo" data-ol="cjk-ideographic" type="button"><span class="ln">一、<i></i></span><span class="ln">二、<i></i></span><span class="nm">一、二、</span></button>
+    <button class="lo" data-ol="paren-num" type="button"><span class="ln">(1)<i></i></span><span class="ln">(2)<i></i></span><span class="nm">(1) (2)</span></button>
+    <button class="lo" data-ol="upper-alpha" type="button"><span class="ln">A.<i></i></span><span class="ln">B.<i></i></span><span class="nm">A. B. C.</span></button>
+    <button class="lo" data-ol="lower-alpha" type="button"><span class="ln">a.<i></i></span><span class="ln">b.<i></i></span><span class="nm">a. b. c.</span></button>
+  </div>
+</div>
+<div class="pop" id="popTable">
+  <div class="pop-title" id="tgridLabel">插入表格</div>
+  <div class="tgrid" id="tgrid"></div>
+</div>
+
+<input type="file" id="fileInput" accept="image/*" multiple hidden>
+<div class="modal-bg" id="helpModal">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <h2 id="helpTitle">使用說明</h2>
+    <p>這是學習紀錄平台的<b>編輯器試用版</b>。工具列的位置和 Word「常用」「插入」索引標籤一樣，在 Word 學到的操作，在這裡大多可以照用。</p>
+    <h3>常用快捷鍵（和 Word 一樣）</h3>
+    <table>
+      <tr><td>粗體／斜體／底線</td><td><kbd>Ctrl</kbd> + <kbd>B</kbd>　<kbd>Ctrl</kbd> + <kbd>I</kbd>　<kbd>Ctrl</kbd> + <kbd>U</kbd></td></tr>
+      <tr><td>復原／重做</td><td><kbd>Ctrl</kbd> + <kbd>Z</kbd>　<kbd>Ctrl</kbd> + <kbd>Y</kbd></td></tr>
+      <tr><td>複製／剪下／貼上</td><td><kbd>Ctrl</kbd> + <kbd>C</kbd>　<kbd>Ctrl</kbd> + <kbd>X</kbd>　<kbd>Ctrl</kbd> + <kbd>V</kbd></td></tr>
+      <tr><td>只貼上文字（不帶格式）</td><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>V</kbd></td></tr>
+      <tr><td>全選</td><td><kbd>Ctrl</kbd> + <kbd>A</kbd></td></tr>
+      <tr><td>放大／縮小字型</td><td><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>&gt;</kbd>　<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>&lt;</kbd></td></tr>
+      <tr><td>表格裡跳到下一格／上一格</td><td><kbd>Tab</kbd>　<kbd>Shift</kbd> + <kbd>Tab</kbd></td></tr>
+      <tr><td>馬上存草稿</td><td><kbd>Ctrl</kbd> + <kbd>S</kbd></td></tr>
+    </table>
+    <h3>小提醒</h3>
+    <ul>
+      <li><b>圖片</b>：「插入」→「圖片」，或直接把截圖貼上、把圖片拖進來。點一下圖片，上方會出現「圖片格式」，可以調大小、靠左／置中／靠右。</li>
+      <li><b>表格</b>：「插入」→「表格」，用滑鼠選要幾欄幾列。游標在表格裡時，上方會出現「表格版面配置」，可以加列、加欄、刪除。在最後一格按 <kbd>Tab</kbd> 會自動多一列。</li>
+      <li><b>項目符號、編號</b>：在項目裡按 <kbd>Tab</kbd> 變成下一層，<kbd>Shift</kbd> + <kbd>Tab</kbd> 回上一層。</li>
+      <li><b>字型</b>：Chromebook 只有黑體和明體兩種中文字型，沒有標楷體。</li>
+      <li><b>送出</b>：寫好了按右上角紅色的「送出」，筆記就會放到你的學習紀錄頁。送出後還可以再改，改完再按一次。</li>
+      <li><b>預覽</b>：按右上角的「預覽」，可以看到送出之後，你的學習紀錄頁和這篇文章會長什麼樣子。</li>
+      <li><b>自動存草稿</b>：打字停下來約 1 秒就會自動存，狀態列會顯示「草稿已自動儲存」。</li>
+      <li><b>試用版限制</b>：草稿只存在<b>這台電腦的這個瀏覽器</b>，換一台 Chromebook 就看不到。正式版會存到學校的資料庫。</li>
+    </ul>
+    <div class="actions"><button class="pbtn" data-close type="button">知道了</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="submitModal">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:560px">
+    <h2 id="smTitle">送出這篇筆記？</h2>
+    <div id="smBody"></div>
+    <div class="actions" id="smActions"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+</section>
+
+<div class="modal-bg" id="appModal"><div class="modal" id="appModalBox" role="dialog" aria-modal="true"></div></div>
+<div class="atoast" id="appToast" role="status"></div>
+
+<script src="js/vendor/supabase.js"></script>
+<script src="js/vendor/qrcode.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
