@@ -558,7 +558,7 @@ async function insertImages(files, range) {
       if (!url) { url = await registerBlob(c.blob); local++; }
       items.push({ url, w: c.w, h: c.h });
     }
-    catch (e) { console.error(e); toast('有一張圖片讀不出來，請換一張試試'); }
+    catch (e) { console.error(e); toast('這個檔案不是可用的圖片（可能是空的或壞掉了），請換一張'); }
   }
   if (!items.length) return;
   editor.focus({ preventScroll: true });
@@ -1015,6 +1015,7 @@ function changed() {
 let H = {};            // 平台給的處理函式：onSave, onSubmit, onPreview, onBack
 let noteKey = null;    // 目前開著的筆記 id
 let saveTimer = 0, saving = null, submittedEver = false, baselineSig = null;
+let savedSig = null, dirtyShown = false;   // savedSig：資料庫裡現在存的內容；和畫面一樣就不用再存
 const hhmm = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 function setSave(kind, msg) { const s = $('#saveState'); s.className = 'save ' + kind; s.textContent = msg; }
 function serialize() {
@@ -1073,24 +1074,33 @@ function refreshSubmitBtn() {
 }
 function scheduleDraft() {
   if (!noteKey) return;
-  setSave('', '編輯中⋯'); clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 1500);
+  setSave('', '編輯中⋯'); dirtyShown = true; clearTimeout(saveTimer); saveTimer = setTimeout(flushSave, 1500);
 }
+const hasPendingImg = () => [...editor.querySelectorAll('img')].some(i => imgData.has(i.getAttribute('src')));
 async function flushSave() {
   clearTimeout(saveTimer);
   if (!noteKey || !H.onSave) return true;
   if (saving) { await saving.catch(() => {}); }
   if (hist.pending) commit();
   const key = noteKey;
+  // 內容和資料庫裡的一樣（例如只是打開看看就返回）→ 不重複存，避免被當成「有新的修改」
+  if (savedSig !== null && !hasPendingImg() && currentSig() === savedSig) {
+    if (dirtyShown) { setSave('ok', '已儲存'); dirtyShown = false; }
+    try { localStorage.removeItem('lr-backup-' + key); } catch (e) {}
+    return true;
+  }
+  let sig = null;
   const run_ = (async () => {
     setSave('', '儲存中⋯');
     await uploadPending();
+    sig = currentSig();
     const data = getData(); data.thumb = await makeThumb();
     await H.onSave(data);
   })();
   saving = run_;
   try {
     await run_;
-    if (key === noteKey) { try { localStorage.removeItem('lr-backup-' + key); } catch (e) {} setSave('ok', `已儲存 ${hhmm(new Date())}`); refreshSubmitBtn(); }
+    if (key === noteKey) { savedSig = sig; dirtyShown = false; try { localStorage.removeItem('lr-backup-' + key); } catch (e) {} setSave('ok', `已儲存 ${hhmm(new Date())}`); refreshSubmitBtn(); }
     return true;
   } catch (e) {
     console.error(e);
@@ -1153,9 +1163,10 @@ document.addEventListener('click', async e => {
   const ok = await flushSave();
   if (!ok) { $('#submitModal').classList.remove('on'); toast('現在連不上網路，連上後再按一次送出'); return; }
   try {
+    const sig = currentSig();
     const data = getData(); data.thumb = await makeThumb();
     await H.onSubmit(data);
-    submittedEver = true; baselineSig = currentSig(); refreshSubmitBtn();
+    submittedEver = true; baselineSig = sig; savedSig = sig; dirtyShown = false; refreshSubmitBtn();
     $('#submitModal').classList.remove('on');
     setSave('ok', `已送出 ${hhmm(new Date())}`);
     H.afterSubmit && H.afterSubmit();
@@ -1188,6 +1199,7 @@ window.LREditor = {
       if (b && b.at > Date.parse(note.updated_at || 0) + 1000) { title = b.title; html = b.html; restored = true; }
     } catch (e) {}
     loadContent(title, html);
+    savedSig = restored ? null : currentSig(); dirtyShown = false;
     submittedEver = !!note.submitted_at;
     baselineSig = (note.submitted_at && !restored && note.sub_html === note.content_html && (note.sub_title || '') === (note.title || '')) ? currentSig() : null;
     refreshSubmitBtn();

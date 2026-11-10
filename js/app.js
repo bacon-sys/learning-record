@@ -125,7 +125,8 @@ function weekStatus(cls, notes, n) {
   }
   return st;
 }
-const hasUnsent = n => n.submitted_at && new Date(n.updated_at) - new Date(n.submitted_at) > 3000;
+// 送出後又改了內容但還沒再送出。由資料庫比對「草稿」和「送出版」的內容（notes.has_unsent），不再用時間猜
+const hasUnsent = n => !!(n.submitted_at && n.has_unsent);
 
 /* ---------- 上方列 ---------- */
 function topbar(crumbs) {
@@ -203,7 +204,7 @@ function viewLogin(params) {
       if (error) { let m = '登入沒有成功，請再試一次'; try { m = (await error.context.json()).message || m; } catch (e) {} throw new Error(m); }
       const { error: e2 } = await sb.auth.setSession({ access_token: data.access_token, refresh_token: data.refresh_token });
       if (e2) throw e2;
-      location.hash = '#/'; await boot();
+      history.replaceState(null, '', location.pathname + '#/'); await boot();
     } catch (e) { showMsg('#stuMsg', e.message || String(e)); btn.disabled = false; btn.textContent = '登入'; }
   }
   $('#fStu').onsubmit = e => { e.preventDefault(); const f = new FormData(e.target); studentLogin(String(f.get('account')).trim(), String(f.get('password')), !!f.get('remember')); };
@@ -214,7 +215,7 @@ function viewLogin(params) {
     const { error } = await sb.auth.signInWithPassword({ email: String(f.get('email')).trim(), password: String(f.get('password')) });
     btn.disabled = false;
     if (error) { showMsg('#teaMsg', 'Email 或密碼不對'); return; }
-    location.hash = '#/'; await boot();
+    history.replaceState(null, '', location.pathname + '#/'); await boot();
   };
   // 掃登入卡 QR code：#/login?u=帳號&p=密碼
   if (params.u && params.p) {
@@ -311,7 +312,7 @@ async function viewClass(cid, tab, sid) {
 async function viewMyBlog(cls) {
   const [enr, notes] = await Promise.all([
     q(sb.from('enrollments').select('seat_no').eq('class_id', cls.id).eq('student_id', S.uid).maybeSingle()),
-    q(sb.from('notes').select('id,title,sub_title,content_text,sub_text,created_at,updated_at,submitted_at,first_submitted_at,cover_url,word_count,share_status').eq('class_id', cls.id).eq('student_id', S.uid).order('created_at', { ascending: false })),
+    q(sb.from('notes').select('id,title,sub_title,content_text,sub_text,created_at,updated_at,submitted_at,first_submitted_at,cover_url,word_count,share_status,has_unsent').eq('class_id', cls.id).eq('student_id', S.uid).order('created_at', { ascending: false })),
   ]);
   const me = { id: S.uid, display_name: S.me.display_name, seat_no: enr?.seat_no };
   const sent = notes.filter(n => n.submitted_at).length;
@@ -364,7 +365,7 @@ async function newNote(cid) {
 async function loadClassData(cls) {
   const [enr, notes, tch, guard] = await Promise.all([
     q(sb.from('enrollments').select('seat_no, student:students(*)').eq('class_id', cls.id)),
-    q(sb.from('notes').select('id,student_id,title,sub_title,sub_text,content_text,created_at,updated_at,submitted_at,first_submitted_at,cover_url,word_count,hidden_by_teacher,share_status').eq('class_id', cls.id).order('created_at', { ascending: false })),
+    q(sb.from('notes').select('id,student_id,title,sub_title,sub_text,content_text,created_at,updated_at,submitted_at,first_submitted_at,cover_url,word_count,hidden_by_teacher,share_status,has_unsent').eq('class_id', cls.id).order('created_at', { ascending: false })),
     q(sb.from('class_teachers').select('teacher:teachers(id,display_name,email)').eq('class_id', cls.id)),
     q(sb.from('login_guard').select('account,locked_until')),
   ]);
@@ -1033,7 +1034,9 @@ function parseHash() {
   const params = Object.fromEntries(new URLSearchParams(qs || ''));
   return { parts: path.split('/').filter(Boolean), params };
 }
+let booting = false;   // 正在確認登入身分時先不畫畫面，等 boot() 結束再畫（避免身分還沒讀到就畫首頁）
 async function route() {
+  if (booting) return;
   const { parts, params } = parseHash();
   if (editing && parts[0] !== 'e') { await window.LREditor.flush(); closeEditor(); }
   if (parts[0] === 'p' && parts[1]) {   // 公開頁：不用登入
@@ -1061,7 +1064,8 @@ async function route() {
   } catch (e) {
     console.error(e);
     app.hidden = false; $('#editorView').hidden = true;
-    app.innerHTML = (S.me ? topbar([]) : '') + `<div class="wrap"><div class="empty"><b>出了一點問題</b>${esc(e.message || e)}<br><br><a class="ab" href="#/">回到首頁</a> <button class="ab" data-act="reload">重新整理</button></div></div>`;
+    if (!S.uid || !S.me) { S.uid = null; S.me = null; return viewLogin({}); }   // 讀資料途中被登出：直接回登入頁
+    app.innerHTML = topbar([]) + `<div class="wrap"><div class="empty"><b>出了一點問題</b>${esc(e.message || e)}<br><br><a class="ab" href="#/">回到首頁</a> <button class="ab" data-act="reload">重新整理</button></div></div>`;
   }
 }
 
@@ -1083,15 +1087,35 @@ addEventListener('hashchange', route);
 
 /* ---------- 啟動：確認登入身分 ---------- */
 async function boot() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (!session) { S.uid = null; return route(); }
-  S.uid = session.user.id;
-  const t = await sb.from('teachers').select('*').eq('id', S.uid).maybeSingle();
-  if (t.data) { S.role = 'teacher'; S.me = t.data; return route(); }
-  const s = await sb.from('students').select('*').eq('id', S.uid).maybeSingle();
-  if (s.data) { S.role = 'student'; S.me = s.data; return route(); }
-  await sb.auth.signOut(); S.uid = null;
-  viewLogin({}); toast('這個帳號還沒設定好，請找老師');
+  booting = true;
+  let problem = null;
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) { S.uid = null; S.me = null; }
+    else {
+      // 身分資料讀到了才算登入（S.uid 和 S.me 一起設定）
+      const uid = session.user.id;
+      const t = await sb.from('teachers').select('*').eq('id', uid).maybeSingle();
+      if (t.data) { S.role = 'teacher'; S.me = t.data; S.uid = uid; }
+      else {
+        const s = t.error ? { error: t.error } : await sb.from('students').select('*').eq('id', uid).maybeSingle();
+        if (s.data) { S.role = 'student'; S.me = s.data; S.uid = uid; }
+        else if (s.error) problem = 'net';        // 網路問題：不要把人登出
+        else problem = 'unset';                   // 帳號存在但沒有老師／學生資料
+      }
+    }
+  } catch (e) { console.error(e); problem = 'net'; }
+  finally { booting = false; }
+  if (problem === 'net') {
+    S.uid = null; S.me = null; app.hidden = false;
+    app.innerHTML = '<div class="wrap"><div class="empty"><b>連不上網路</b>請確認網路後再試一次。<br><br><button class="ab" data-act="reload">重新整理</button></div></div>';
+    return;
+  }
+  if (problem === 'unset') {
+    S.uid = null; S.me = null; await sb.auth.signOut();
+    viewLogin({}); toast('這個帳號還沒設定好，請找老師'); return;
+  }
+  return route();
 }
 sb.auth.onAuthStateChange((ev) => { if (ev === 'SIGNED_OUT' && S.uid) { S.uid = null; S.me = null; closeEditor(); route(); } });
 boot();
