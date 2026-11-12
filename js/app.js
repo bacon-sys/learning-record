@@ -138,7 +138,7 @@ function topbar(crumbs) {
     <a class="abrand" href="#/" title="${esc(CFG.site)}"><span class="logo">${logo}</span><span class="bt">${esc(CFG.site)}</span></a>
     <nav class="crumb" aria-label="目前位置">${crumbs.map((c, i) => (i ? `<span class="sep" aria-hidden="true">${ICON.next}</span>` : '') + (c[1] && i !== last ? `<a class="cp" href="${c[1]}">${esc(c[0])}</a>` : `<span class="cp ${i === last ? 'on' : ''}" ${i === last ? 'aria-current="page"' : ''}>${esc(c[0])}</span>`)).join('')}</nav>
     <span class="sp"></span>
-    ${S.role === 'teacher' && S.me.is_admin ? `<a class="link" href="#/admin" title="老師帳號" aria-label="老師帳號">${ICON.users}<span class="wn">老師帳號</span></a>` : ''}
+    ${S.role === 'teacher' && S.me.is_admin ? `<a class="link" href="#/admin" title="管理：老師帳號、資料備份" aria-label="管理">${ICON.users}<span class="wn">管理</span></a>` : ''}
     <a class="who-chip" href="#/me" title="我的帳號、改密碼"><span class="mini-av" style="background:${who.color}">${esc(who.av)}</span><span class="wn">${esc(who.label)}</span></a>
     <button class="link" data-act="logout">登出</button>
   </div></header>`;
@@ -604,7 +604,7 @@ async function viewSettings(cls, data, head) {
           ${t.id !== S.uid && data.teachers.length > 1 ? `<button class="ab sm" data-rmt="${t.id}">移除</button>` : ''}</li>`).join('')}</ul>
         <form id="fAddT"><label class="fld"><span>加入老師（輸入老師帳號的 email）</span><input name="email" type="email" placeholder="teacher@tmail.ilc.edu.tw" required></label>
         <button class="ab" type="submit">加入</button></form>
-        ${S.me.is_admin ? '<p class="d" style="margin-top:10px">老師還沒有帳號？到右上角「老師帳號」新增。</p>' : '<p class="d" style="margin-top:10px">對方要先有老師帳號（請管理者新增）。</p>'}
+        ${S.me.is_admin ? '<p class="d" style="margin-top:10px">老師還沒有帳號？到右上角「管理」新增。</p>' : '<p class="d" style="margin-top:10px">對方要先有老師帳號（請管理者新增）。</p>'}
       </div>
     </div>
     <div class="box">
@@ -1002,14 +1002,117 @@ function viewMe() {
     } catch (err) { out.innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
   };
 }
+/* 備份用：不壓縮的 zip（照片本來就壓過了）。parts 直接放 Blob，不會把全部照片同時塞進記憶體 */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let i = 0; i < 256; i++) { let c = i; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[i] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function makeZip() {
+  const enc = new TextEncoder(), parts = [], dir = []; let offset = 0;
+  const d = new Date(), dosT = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), dosD = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+  return {
+    count: () => dir.length, size: () => offset,
+    async add(name, data) {   // data：字串、Blob 或 Uint8Array
+      const blob = data instanceof Blob ? data : new Blob([data]);
+      const u8 = new Uint8Array(await blob.arrayBuffer()), crc = crc32(u8), nm = enc.encode(name);
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+      h.setUint16(10, dosT, true); h.setUint16(12, dosD, true); h.setUint32(14, crc, true); h.setUint32(18, u8.length, true); h.setUint32(22, u8.length, true);
+      h.setUint16(26, nm.length, true); h.setUint16(28, 0, true);
+      parts.push(h.buffer, nm, blob);
+      dir.push({ nm, crc, size: u8.length, offset });
+      offset += 30 + nm.length + u8.length;
+    },
+    finish() {
+      if (dir.length > 65000 || offset > 3.9e9) throw new Error('備份太大了，請改成不含照片，並告訴管理者');
+      const cdStart = offset; let cdSize = 0;
+      for (const f of dir) {
+        const c = new DataView(new ArrayBuffer(46));
+        c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+        c.setUint16(12, dosT, true); c.setUint16(14, dosD, true); c.setUint32(16, f.crc, true); c.setUint32(20, f.size, true); c.setUint32(24, f.size, true);
+        c.setUint16(28, f.nm.length, true); c.setUint32(42, f.offset, true);
+        parts.push(c.buffer, f.nm); cdSize += 46 + f.nm.length;
+      }
+      const e = new DataView(new ArrayBuffer(22));
+      e.setUint32(0, 0x06054b50, true); e.setUint16(8, dir.length, true); e.setUint16(10, dir.length, true); e.setUint32(12, cdSize, true); e.setUint32(16, cdStart, true);
+      parts.push(e.buffer);
+      return new Blob(parts, { type: 'application/zip' });
+    },
+  };
+}
+const fmtSize = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
+const daysAgo = d => Math.floor((Date.now() - new Date(d)) / 86400000);
+const agoText = d => { const n = daysAgo(d); return n <= 0 ? '今天' : n === 1 ? '昨天' : `${n} 天前`; };
+async function downloadBackup(withPhotos, say) {
+  say('讀取資料中⋯');
+  const data = await q(sb.rpc('admin_backup'));
+  const T = data.tables, zip = makeZip(), day = new Date().toLocaleDateString('sv-SE');
+  const missing = []; let done = 0;
+  const files = withPhotos ? data.files : [];
+  let next = 0;
+  const worker = async () => {
+    while (next < files.length) {
+      const f = files[next++];
+      try {
+        const r = await fetch(sb.storage.from(BUCKET).getPublicUrl(f.name).data.publicUrl);
+        if (!r.ok) throw new Error(r.status);
+        f.blob = await r.blob();
+      } catch (e) { console.warn('備份：照片下載失敗', f.name, e); missing.push(f.name); }
+      say(`下載照片中⋯ ${++done}／${files.length}`);
+    }
+  };
+  await Promise.all([worker(), worker(), worker(), worker()]);
+  say('打包中⋯');
+  const sentN = T.notes.filter(n => n.submitted_at).length;
+  await zip.add('說明.txt', [
+    `${CFG.school}「${CFG.site}」資料備份`, `備份時間：${new Date().toLocaleString('zh-TW', { hour12: false })}`, `備份的人：${S.me.display_name}（${S.me.email}）`, '',
+    `班級 ${T.classes.length} 個、學生 ${T.students.length} 位、老師 ${T.teachers.length} 位`,
+    `筆記 ${T.notes.length} 篇（已送出 ${sentN} 篇）`,
+    withPhotos ? `照片 ${files.length - missing.length} 張${missing.length ? `（另有 ${missing.length} 張下載失敗，清單在「缺少的照片.txt」）` : ''}` : '這份備份不含照片',
+    '', '【裡面有什麼】',
+    'data.json　　全部資料：班級、學生名單、老師、每篇筆記的草稿和送出版',
+    'photos/　　　筆記裡的照片，資料夾是「班級代碼/學生代碼/筆記代碼」',
+    '', '【請注意】',
+    '1. data.json 裡有學生的真實姓名，和登入卡上的密碼。請放在只有老師能打開的地方，不要傳到公開的群組。',
+    '2. 這是保存用的備份。萬一資料庫出問題要還原，請把這個 zip 檔交給協助維護的人處理。',
+    '3. 學生自己改過的密碼不在備份裡；還原後請用「重設密碼」重新發登入卡。',
+  ].join('\r\n'));
+  await zip.add('data.json', JSON.stringify({ ...data, files: data.files.map(f => ({ name: f.name, size: f.size, type: f.type, created_at: f.created_at })) }, null, 1));
+  for (const f of files) if (f.blob) { await zip.add('photos/' + f.name, f.blob); f.blob = null; }
+  if (missing.length) await zip.add('缺少的照片.txt', missing.join('\r\n'));
+  const out = zip.finish();
+  const a = document.createElement('a'); a.href = URL.createObjectURL(out); a.download = `學習紀錄備份-${day}.zip`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  try { await q(sb.from('backup_log').insert({ by_teacher: S.uid, notes_count: T.notes.length, files_count: files.length - missing.length, bytes: out.size, with_photos: withPhotos })); } catch (e) { console.warn(e); }
+  return { size: out.size, notes: T.notes.length, photos: files.length - missing.length, missing: missing.length };
+}
 async function viewAdmin() {
   if (!(S.role === 'teacher' && S.me.is_admin)) { location.hash = '#/'; return; }
   loading();
-  const ts = await q(sb.from('teachers').select('*').order('created_at'));
-  app.innerHTML = topbar([['老師帳號']]) + `
+  const [ts, logs, st] = await Promise.all([
+    q(sb.from('teachers').select('*').order('created_at')),
+    q(sb.from('backup_log').select('at,notes_count,files_count,bytes,with_photos').order('at', { ascending: false }).limit(1)),
+    q(sb.from('app_status').select('at,n').eq('key', 'keepalive').maybeSingle()),
+  ]);
+  const last = logs[0];
+  const bkState = !last ? tagTodo('還沒備份過')
+    : daysAgo(last.at) > 30 ? tagTodo(`上次備份：${agoText(last.at)}，建議再備份一次`)
+    : tagOk(`上次備份：${agoText(last.at)}`);
+  const kaState = !st ? tagTodo('還沒有紀錄（排程每天凌晨會連一次）')
+    : daysAgo(st.at) > 3 ? tagTodo(`已經 ${daysAgo(st.at)} 天沒有自動連線`)
+    : tagOk(`上次自動連線：${agoText(st.at)}（${fmtDT(st.at)}）`);
+  app.innerHTML = topbar([['管理']]) + `
   <div class="wrap read">
-    <h1 class="pg">老師帳號</h1><p class="sub">只有管理者看得到這一頁。</p>
-    <div class="box"><table class="acct"><thead><tr><th>稱呼</th><th>Email</th><th>身分</th></tr></thead>
+    <h1 class="pg">管理</h1><p class="sub">只有管理者看得到這一頁。</p>
+    <div class="box"><h3>資料備份</h3>
+      <p class="d">把全部班級、名單、筆記和照片打包成一個壓縮檔，下載到這台電腦。建議每個月、還有學期結束時各備份一次。</p>
+      <p style="margin:0 0 16px">${bkState}${last ? `<span class="d" style="margin-left:10px;color:var(--ink-2);font-size:16px">${fmtDT(last.at)}・筆記 ${last.notes_count} 篇・${last.with_photos ? `照片 ${last.files_count} 張` : '不含照片'}・${fmtSize(last.bytes)}</span>` : ''}</p>
+      <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="bkPhotos" checked>包含照片（檔案比較大，下載比較久）</label>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><button class="ab pri" id="bkGo" type="button">下載備份</button><span id="bkMsg" role="status" style="color:var(--ink-2);font-size:16px"></span></div>
+      <p class="d" style="margin:16px 0 0">備份檔裡有學生的真實姓名和登入卡密碼，請放在只有老師能打開的地方。</p></div>
+    <div class="box"><h3>防暫停</h3>
+      <p class="d">資料庫是免費方案，超過一星期沒人用會被暫停。所以有一個排程每天凌晨自動連線一次，寒暑假也不會停。</p>
+      <p style="margin:0">${kaState}</p>
+      ${st && daysAgo(st.at) > 3 || !st ? `<p class="d" style="margin:14px 0 0">如果一直沒有紀錄：到 GitHub 的 learning-record 儲存庫 →「Actions」→ 左邊「防暫停」→ 若出現「Enable workflow」就按下去，再按「Run workflow」。</p>` : ''}</div>
+    <div class="box"><h3>老師帳號</h3><table class="acct"><thead><tr><th>稱呼</th><th>Email</th><th>身分</th></tr></thead>
       <tbody>${ts.map(t => `<tr><td>${esc(t.display_name)}</td><td>${esc(t.email)}</td><td>${t.is_admin ? '管理者' : '老師'}</td></tr>`).join('')}</tbody></table></div>
     <div class="box"><h3>新增老師</h3><p class="d">系統會產生一組暫時密碼，請轉交給那位老師，並請他登入後到「我的帳號」改密碼。</p>
       <form id="fNewT" style="max-width:460px">
@@ -1017,6 +1120,15 @@ async function viewAdmin() {
         <label class="fld"><span>稱呼（例如：尤慕斯‧舒漾）</span><input name="display_name" required></label>
         <button class="ab pri" type="submit">新增</button></form></div>
   </div>`;
+  $('#bkGo').onclick = async () => {
+    const btn = $('#bkGo'), msg = $('#bkMsg'), withPhotos = $('#bkPhotos').checked; btn.disabled = true;
+    try {
+      const r = await downloadBackup(withPhotos, t => { msg.textContent = t; });
+      toast('備份下載好了'); await viewAdmin();
+      $('#bkPhotos').checked = withPhotos;
+      $('#bkMsg').textContent = `已下載：筆記 ${r.notes} 篇${withPhotos ? `、照片 ${r.photos} 張` : '、不含照片'}（${fmtSize(r.size)}）${r.missing ? `；有 ${r.missing} 張照片沒抓到，清單在壓縮檔裡` : ''}`;
+    } catch (e) { console.error(e); msg.textContent = '備份沒有成功：' + (e.message || e); btn.disabled = false; }
+  };
   $('#fNewT').onsubmit = async e => {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
     try {

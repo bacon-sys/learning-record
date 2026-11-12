@@ -1,0 +1,40 @@
+# 防暫停：Supabase 免費方案超過一星期沒人用會暫停，所以每天自動連一次資料庫（寒暑假也會跑）。
+# 連線結果會記在資料庫，網站「管理」頁的「防暫停」看得到上次連線的時間。
+name: 防暫停
+
+on:
+  schedule:
+    - cron: '17 19 * * *'   # 每天台灣時間凌晨 3:17（GitHub 用的是 UTC）
+  workflow_dispatch:         # 也可以到 Actions 頁面手動按「Run workflow」
+
+permissions:
+  actions: write             # 讓下面第二步可以把這個排程維持在啟用狀態
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 連線到資料庫
+        env:
+          SB_URL: https://llolyqqhfxzmbgiqohvk.supabase.co
+          SB_KEY: sb_publishable_iQeaEqOHoC1Y4NlXr134Xg_dD9Mo7Ll   # 公開金鑰，和 js/config.js 裡的是同一把
+        run: |
+          for i in 1 2 3; do
+            code=$(curl -sS -o out.json -w '%{http_code}' -X POST "$SB_URL/rest/v1/rpc/keepalive" \
+              -H "apikey: $SB_KEY" -H "Authorization: Bearer $SB_KEY" \
+              -H 'Content-Type: application/json' -d '{}' || echo 000)
+            echo "第 $i 次：HTTP $code $(cat out.json 2>/dev/null)"
+            if [ "$code" = "200" ]; then exit 0; fi
+            sleep 20
+          done
+          echo "::error::連不上資料庫（可能已經被暫停）。請到 Supabase 後台確認 learning-record 專案，被暫停的話按 Resume。"
+          exit 1
+
+      # 公開儲存庫 60 天沒有任何動靜時，GitHub 會自動停用排程。每次執行都重新「啟用」一次來避免。
+      - name: 讓排程保持啟用
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/keepalive.yml/enable"
