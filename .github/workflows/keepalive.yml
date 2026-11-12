@@ -4,7 +4,9 @@ name: 防暫停
 
 on:
   schedule:
+    # GitHub 的排程偶爾會延遲或漏跑，所以一天排兩次；資料庫要一星期沒人用才會暫停，漏一兩次沒關係
     - cron: '17 19 * * *'   # 每天台灣時間凌晨 3:17（GitHub 用的是 UTC）
+    - cron: '43 7 * * *'    # 每天台灣時間下午 3:43
   workflow_dispatch:         # 也可以到 Actions 頁面手動按「Run workflow」
 
 permissions:

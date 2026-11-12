@@ -1265,7 +1265,7 @@ async function viewAdmin() {
   const bkState = !last ? tagTodo('還沒備份過')
     : daysAgo(last.at) > 30 ? tagTodo(`上次備份：${agoText(last.at)}，建議再備份一次`)
     : tagOk(`上次備份：${agoText(last.at)}`);
-  const kaState = !st ? tagTodo('還沒有紀錄（排程每天凌晨會連一次）')
+  const kaState = !st ? tagTodo('還沒有紀錄（排程每天會連兩次）')
     : daysAgo(st.at) > 3 ? tagTodo(`已經 ${daysAgo(st.at)} 天沒有自動連線`)
     : tagOk(`上次自動連線：${agoText(st.at)}（${fmtDT(st.at)}）`);
   app.innerHTML = topbar([['管理']]) + `
@@ -1279,7 +1279,7 @@ async function viewAdmin() {
       <p class="d" style="margin:16px 0 0">備份檔裡有學生的真實姓名和登入卡密碼，請放在只有老師能打開的地方。</p>
       ${ph ? `<p class="d" style="margin:10px 0 0">目前雲端空間共有照片 ${ph.count} 張、${fmtSize(ph.bytes)}（免費空間上限 1 GB）。${ph.bytes > 8e8 ? '<b>快滿了</b>：請到各班的「班級設定」清理沒用到的照片，或刪除不需要的舊班級。' : ''}</p>` : ''}</div>
     <div class="box"><h3>防暫停</h3>
-      <p class="d">資料庫是免費方案，超過一星期沒人用會被暫停。所以有一個排程每天凌晨自動連線一次，寒暑假也不會停。</p>
+      <p class="d">資料庫是免費方案，超過一星期沒人用會被暫停。所以有一個排程每天自動連線兩次（凌晨和下午），寒暑假也不會停。</p>
       <p style="margin:0">${kaState}</p>
       ${st && daysAgo(st.at) > 3 || !st ? `<p class="d" style="margin:14px 0 0">如果一直沒有紀錄：到 GitHub 的 learning-record 儲存庫 →「Actions」→ 左邊「防暫停」→ 若出現「Enable workflow」就按下去，再按「Run workflow」。</p>` : ''}</div>
     <div class="box"><h3>老師帳號</h3><table class="acct"><thead><tr><th>稱呼</th><th>Email</th><th>身分</th></tr></thead>
