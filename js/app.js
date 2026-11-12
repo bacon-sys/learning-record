@@ -1080,19 +1080,35 @@ async function viewPortfolio(cid, params) {
       <label class="chk"><input type="checkbox" id="pfPub">只收已經公開的筆記（要給校外的人看時用）</label>
       <label class="chk"><input type="checkbox" id="pfBrk" checked>每篇筆記從新的一頁開始（取消比較省紙）</label>
       <p class="d" id="pfSum" style="margin:8px 0 0"></p>
+      <p class="d" id="pfLoad" role="status" style="margin:8px 0 0"></p>
       <p class="d" style="margin:8px 0 0">按「列印／另存成 PDF」後，在列印視窗的「目的地」選「另存為 PDF」就會存成檔案；選印表機就是直接印（A4 直式）。影片印不出來，會改成 QR code，用手機掃就能看。下面是預覽。</p>
     </div>
+    <p class="pf-warn" id="pfWarn">照片還沒有全部載入，這一份可能有照片是空白的。請關掉列印視窗，等畫面上方顯示「照片都載入好了」再印。</p>
     <div id="pfOut" class="pf"></div>
   </div>`;
   if (isT) $('#pfWho').value = st.who;
+  let gen = 0, people = 0;
+  // 照片不等捲到才載入：一進頁面就全部載，載完才能印（用 Ctrl+P 印也不會缺圖）
+  const track = () => {
+    const g = ++gen, imgs = [...$('#pfOut').querySelectorAll('img')], total = imgs.length;
+    const upd = () => {
+      if (g !== gen || !$('#pfLoad')) return;
+      const done = imgs.filter(im => im.complete).length, fail = imgs.filter(im => im.complete && !im.naturalWidth).length, busy = done < total;
+      $('#pfLoad').textContent = !total ? '' : busy ? `照片載入中 ${done}／${total}⋯（載完才能列印）` : fail ? `照片載入完成，但有 ${fail} 張載入失敗，印出來會是空白；可以重新整理再試一次。` : `照片 ${total} 張都載入好了。`;
+      $('#pfWarn').classList.toggle('on', busy);
+      $('#pfPrint').disabled = !people || busy;
+    };
+    imgs.forEach(im => { if (!im.complete) { im.addEventListener('load', upd, { once: true }); im.addEventListener('error', upd, { once: true }); } });
+    upd();
+  };
   const render = () => {
     const list = students.filter(x => st.who === 'all' || x.id === st.who);
     const out = $('#pfOut'); out.innerHTML = ''; out.classList.toggle('brk', st.brk);
-    const empty = []; let total = 0, people = 0;
+    const empty = []; let total = 0, priv = 0; people = 0;
     for (const stu of list) {
       const mine = notes.filter(n => n.student_id === stu.id && (!st.pub || (n.share_status === 'approved' && !n.hidden_by_teacher)));
       if (!mine.length) { empty.push(stu.name); continue; }
-      people++; total += mine.length;
+      people++; total += mine.length; priv += mine.filter(n => !(n.share_status === 'approved' && !n.hidden_by_teacher)).length;
       const words = mine.reduce((a, n) => a + (n.word_count || 0), 0);
       const d0 = mine[0].first_submitted_at, d1 = mine[mine.length - 1].first_submitted_at;
       const wk = n => Math.max(1, weekNo(cls, n.first_submitted_at));
@@ -1129,28 +1145,23 @@ async function viewPortfolio(cid, params) {
           box.innerHTML = `<div class="qr">${qrSVG(url)}</div><div class="vx"><b>影片</b><span>用手機掃 QR code 觀看</span><span class="url">${esc(url)}</span></div>`;
           v.replaceWith(box);
         });
-        body.querySelectorAll('img').forEach(im => { im.loading = 'lazy'; im.decoding = 'async'; });
+        body.querySelectorAll('img').forEach(im => { im.loading = 'eager'; im.decoding = 'async'; });
         sec.appendChild(art);
       });
       out.appendChild(sec);
     }
     if (!people) out.innerHTML = `<div class="empty"><b>沒有可以收錄的筆記</b>${st.pub ? '目前沒有已經公開的筆記；取消上面的勾選就會收錄全部已送出的筆記。' : '要先送出筆記，才會出現在作品集裡。'}</div>`;
-    $('#pfSum').textContent = `這份作品集：${people} 位學生、共 ${total} 篇筆記（只收已送出的版本，草稿不收）。` + (empty.length && isT ? `沒有收錄：${empty.join('、')}（沒有${st.pub ? '已公開' : '已送出'}的筆記）。` : '');
-    $('#pfPrint').disabled = !people;
+    $('#pfSum').textContent = `這份作品集：${people} 位學生、共 ${total} 篇筆記（只收已送出的版本，草稿不收）。`
+      + (priv ? `其中 ${priv} 篇沒有公開（只有學生自己和老師看得到）；要給校外的人看，請勾上面的「只收已經公開的筆記」。` : '')
+      + (empty.length && isT ? `沒有收錄：${empty.join('、')}（沒有${st.pub ? '已公開' : '已送出'}的筆記）。` : '');
+    track();
   };
   render();
   if (isT) $('#pfWho').onchange = e => { st.who = e.target.value; render(); };
   $('#pfPub').onchange = e => { st.pub = e.target.checked; render(); };
   $('#pfBrk').onchange = e => { st.brk = e.target.checked; render(); };
-  $('#pfPrint').onclick = async () => {
-    const btn = $('#pfPrint'), out = $('#pfOut');
-    out.querySelectorAll('img').forEach(im => { im.loading = 'eager'; });   // 列印前把還沒載入的照片全部載完
-    const wait = [...out.querySelectorAll('img')].filter(im => !im.complete);
-    if (wait.length) {
-      btn.disabled = true; toast(`照片載入中（${wait.length} 張）⋯`);
-      await Promise.race([Promise.all(wait.map(im => new Promise(r => { im.addEventListener('load', r, { once: true }); im.addEventListener('error', r, { once: true }); }))), new Promise(r => setTimeout(r, 20000))]);
-      btn.disabled = false;
-    }
+  $('#pfPrint').onclick = () => {
+    if ([...$('#pfOut').querySelectorAll('img')].some(im => !im.complete)) { toast('照片還在載入，請稍等一下'); return; }
     const one = st.who !== 'all' ? students.find(x => x.id === st.who) : null;
     const old = document.title;
     document.title = `作品集-${cls.name}-${one ? `${one.seat_no ?? ''}${one.name}` : '全班'}`;   // 另存成 PDF 時的預設檔名
@@ -1319,7 +1330,7 @@ async function route() {
   if (!S.uid) { if (parts[0] !== 'login') { history.replaceState(null, '', location.pathname + '#/login' + (params.u ? `?u=${params.u}&p=${params.p}` : '')); } return viewLogin(params); }
   window.scrollTo(0, 0);
   try {
-    if (parts[0] === 'login') { if (params.u && params.p && !(S.role === 'student' && S.me.account === params.u)) { /* 換學生帳號登入 */ await sb.auth.signOut(); S.uid = null; return viewLogin(params); } location.hash = '#/'; return; }
+    if (parts[0] === 'login') { if (params.u && params.p && !(S.role === 'student' && S.me.account === params.u)) { /* 換學生帳號登入 */ await sb.auth.signOut(); S.uid = null; return viewLogin(params); } history.replaceState(null, '', location.pathname + '#/'); return route(); }
     if (!parts.length) return await viewHome();
     if (parts[0] === 'c' && parts[1]) {
       if (parts[2] === 'cards') return await viewCards(parts[1], params);

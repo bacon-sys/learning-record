@@ -415,6 +415,7 @@ mark{background:#FFE79A;color:inherit;border-radius:3px;padding:0 2px}
 
 /* ===== 第四階段：期末作品集（A4 直式；螢幕上是預覽，列印時每個 .pf-page 接著排） ===== */
 .pf-wrap{max-width:calc(210mm + 64px)}
+.pf-warn{display:none}
 .pf-opts .chk{margin:0;min-height:44px}
 .pf-page{background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow);width:210mm;max-width:100%;margin:0 auto 24px;padding:14mm 14mm 16mm;position:relative;color:#2B2725}
 .pf-cover{padding:0;min-height:260mm;display:flex;flex-direction:column;overflow:hidden}
@@ -453,6 +454,7 @@ mark{background:#FFE79A;color:inherit;border-radius:3px;padding:0 2px}
 @media (max-width:760px){ .pf-page{padding:20px 16px} .pf-cover{padding:0;min-height:0} .pf-name{margin-top:10mm} .pf-stats{gap:3mm;margin-top:8mm} .pf-stats div{min-width:26mm} }
 @media print{
   .pf-wrap{max-width:none}
+  .pf-warn.on{display:block;border:2px solid #000;padding:6mm;margin:0 0 8mm;font-size:14pt;font-weight:700}
   .pf-page{border:none;border-radius:0;box-shadow:none;width:auto;max-width:none;margin:0;padding:0}
   .pf-cover{height:268mm;min-height:0;break-after:page}
   .pf-ban,.pf-stats div,.pf-meta .tag,.pf-video{-webkit-print-color-adjust:exact;print-color-adjust:exact}
