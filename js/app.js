@@ -320,7 +320,7 @@ async function viewMyBlog(cls) {
   app.innerHTML = topbar([[cls.name]]) + `
   <div class="wrap narrow">
     ${blogHead(me, cls, act)}
-    <div class="sec-head"><h2>我的學習筆記</h2><span class="meta">已送出 ${sent} 篇・草稿 ${notes.length - sent} 篇　<a class="ab sm" href="${wallHash(cls)}">${ICON.globe}班級展示牆</a></span></div>
+    <div class="sec-head"><h2>我的學習筆記</h2><span class="meta">已送出 ${sent} 篇・草稿 ${notes.length - sent} 篇　<a class="ab sm" href="${wallHash(cls)}">${ICON.globe}班級展示牆</a>${sent ? ` <a class="ab sm" href="#/c/${cls.id}/portfolio">${ICON.print}我的作品集</a>` : ''}</span></div>
     ${notes.length ? `<div class="searchbar"><input id="searchBox" placeholder="搜尋我寫過的詞，例如：菱形紋" autocomplete="off"></div>` : ''}
     <div id="noteArea">${notes.length ? `<div class="cards">${notes.map(n => noteCard(n, cls, n.submitted_at ? `#/n/${n.id}` : `#/e/${n.id}`, true)).join('')}</div>`
       : `<div class="empty"><b>還沒有筆記</b>${cls.archived ? '' : '按上面的「寫新的筆記」開始寫第一篇。'}</div>`}</div>
@@ -378,7 +378,7 @@ const statCard = (icon, tone, label, value, unit, p) => `<div class="stat-card">
   <div class="v">${value}<small>${unit}</small></div><div class="bar ${tone}"><i style="width:${p}%"></i></div></div>`;
 function classHeader(cls, data, tab) {
   const pendN = data.notes.filter(n => n.share_status === 'pending').length;
-  const tabs = [['blogs', '學生部落格'], ['progress', '進度一覽'], ['share', `公開審核${pendN ? `<span class="cnt">${pendN}</span>` : ''}`], ['roster', '名單與帳號'], ['settings', '班級設定']];
+  const tabs = [['blogs', '學生部落格'], ['progress', '進度一覽'], ['share', `公開審核${pendN ? `<span class="cnt">${pendN}</span>` : ''}`], ['roster', '名單與帳號'], ['portfolio', '作品集'], ['settings', '班級設定']];
   const wk = curWeek(cls);
   const st = data.students.map(s => weekStatus(cls, data.notes.filter(n => n.student_id === s.id), wk));
   const total = data.students.length || 0;
@@ -464,7 +464,7 @@ async function viewStudentBlogAsTeacher(cls, sid) {
     <div class="teacher-banner"><b>老師檢視</b>${esc(s.display_name)}（${s.seat_no ?? ''} 號 ${esc(s.name)}）的全部筆記，包含還沒送出的草稿。<span class="sp"></span>
       ${prev ? `<a class="ab sm" href="#/c/${cls.id}/s/${prev.id}">${ICON.prev}${esc(prev.display_name)}</a>` : ''}${next ? `<a class="ab sm" href="#/c/${cls.id}/s/${next.id}">${esc(next.display_name)}${ICON.next}</a>` : ''}</div>
     ${blogHead(s, cls)}
-    <div class="sec-head"><h2>${esc(s.display_name)} 的學習筆記</h2><span class="meta">已送出 ${mine.filter(n => n.submitted_at).length} 篇・草稿 ${mine.filter(n => !n.submitted_at).length} 篇</span></div>
+    <div class="sec-head"><h2>${esc(s.display_name)} 的學習筆記</h2><span class="meta">已送出 ${mine.filter(n => n.submitted_at).length} 篇・草稿 ${mine.filter(n => !n.submitted_at).length} 篇　<a class="ab sm" href="#/c/${cls.id}/portfolio?s=${s.id}">${ICON.print}作品集</a></span></div>
     ${mine.length ? `<div class="cards">${mine.map(n => noteCard(n, cls, `#/n/${n.id}`, false)).join('')}</div>` : '<div class="empty"><b>還沒有筆記</b></div>'}
   </div>`;
 }
@@ -1002,6 +1002,119 @@ function viewMe() {
     } catch (err) { out.innerHTML = `<div class="msg err">${esc(err.message)}</div>`; }
   };
 }
+/* ---------- 期末作品集（列印／另存成 PDF） ---------- */
+async function viewPortfolio(cid, params) {
+  loading('整理作品集中⋯');
+  const cls = await loadClass(cid);
+  const isT = S.role === 'teacher';
+  let students, teachers;
+  if (isT) { const d = await loadClassData(cls); students = d.students; teachers = d.teachers; }
+  else {
+    const [enr, tch] = await Promise.all([
+      q(sb.from('enrollments').select('seat_no').eq('class_id', cls.id).eq('student_id', S.uid).maybeSingle()),
+      q(sb.from('class_teachers').select('teacher:teachers(display_name)').eq('class_id', cls.id)),
+    ]);
+    students = [{ id: S.uid, name: S.me.name, display_name: S.me.display_name, seat_no: enr?.seat_no }];
+    teachers = tch.map(t => t.teacher).filter(Boolean);
+  }
+  let nq = sb.from('notes').select('id,student_id,sub_title,sub_html,word_count,first_submitted_at,submitted_at,share_status,hidden_by_teacher')
+    .eq('class_id', cls.id).not('submitted_at', 'is', null).order('first_submitted_at');
+  if (!isT) nq = nq.eq('student_id', S.uid);
+  const notes = await q(nq);
+  const st = { who: isT ? (students.some(x => x.id === params.s) ? params.s : 'all') : S.uid, pub: false, brk: true };
+  const back = isT ? (params.s ? `#/c/${cls.id}/s/${params.s}` : `#/c/${cls.id}`) : `#/c/${cls.id}`;
+  const tNames = teachers.map(t => t.display_name).join('、');
+  app.innerHTML = topbar(isT ? [['我的班級', '#/'], [cls.name, `#/c/${cls.id}`], ['作品集']] : [[cls.name, `#/c/${cls.id}`], ['我的作品集']]) + `
+  <div class="wrap pf-wrap">
+    <div class="print-bar"><h1 class="pg" style="margin:0">${isT ? '作品集' : '我的作品集'}</h1><span class="sp" style="flex:1"></span>
+      <a class="back-link" href="${back}">${ICON.back}回上一頁</a>
+      <button class="ab dark" id="pfPrint" type="button">${ICON.print}列印／另存成 PDF</button></div>
+    <div class="box no-print pf-opts">
+      ${isT ? `<label class="fld" style="max-width:420px"><span>要印誰的</span><select id="pfWho">
+        <option value="all">全班（合成一份，每人從新的一頁開始）</option>
+        ${students.map(x => `<option value="${x.id}">${x.seat_no ?? ''} 號　${esc(x.name)}</option>`).join('')}</select></label>` : ''}
+      <label class="chk"><input type="checkbox" id="pfPub">只收已經公開的筆記（要給校外的人看時用）</label>
+      <label class="chk"><input type="checkbox" id="pfBrk" checked>每篇筆記從新的一頁開始（取消比較省紙）</label>
+      <p class="d" id="pfSum" style="margin:8px 0 0"></p>
+      <p class="d" style="margin:8px 0 0">按「列印／另存成 PDF」後，在列印視窗的「目的地」選「另存為 PDF」就會存成檔案；選印表機就是直接印（A4 直式）。影片印不出來，會改成 QR code，用手機掃就能看。下面是預覽。</p>
+    </div>
+    <div id="pfOut" class="pf"></div>
+  </div>`;
+  if (isT) $('#pfWho').value = st.who;
+  const render = () => {
+    const list = students.filter(x => st.who === 'all' || x.id === st.who);
+    const out = $('#pfOut'); out.innerHTML = ''; out.classList.toggle('brk', st.brk);
+    const empty = []; let total = 0, people = 0;
+    for (const stu of list) {
+      const mine = notes.filter(n => n.student_id === stu.id && (!st.pub || (n.share_status === 'approved' && !n.hidden_by_teacher)));
+      if (!mine.length) { empty.push(stu.name); continue; }
+      people++; total += mine.length;
+      const words = mine.reduce((a, n) => a + (n.word_count || 0), 0);
+      const d0 = mine[0].first_submitted_at, d1 = mine[mine.length - 1].first_submitted_at;
+      const wk = n => Math.max(1, weekNo(cls, n.first_submitted_at));
+      const sec = document.createElement('section'); sec.className = 'pf-stu';
+      sec.innerHTML = `
+        <div class="pf-page pf-cover">
+          <div class="pf-ban"></div>
+          <div class="pf-cin">
+            <div class="pf-school">${esc(CFG.school)}</div>
+            <div class="pf-kind">學習紀錄作品集</div>
+            <div class="pf-class">${esc(cls.name)}</div>
+            <div class="pf-name">${esc(stu.name)}</div>
+            <div class="pf-seat">${stu.seat_no ? `${stu.seat_no} 號` : ''}</div>
+            <div class="pf-stats">
+              <div><b>${mine.length}</b><span>篇筆記</span></div>
+              <div><b>${words.toLocaleString()}</b><span>字</span></div>
+              <div><b>${fmtD(d0) === fmtD(d1) ? fmtD(d0) : `${fmtD(d0)}–${fmtD(d1)}`}</b><span>${new Date(d0).getFullYear()} 年</span></div>
+            </div>
+            <div class="pf-foot">${cls.term ? `<span>學期：${esc(cls.term)}</span>` : ''}${tNames ? `<span>指導老師：${esc(tNames)}</span>` : ''}${st.pub ? '<span>本冊只收錄已公開的筆記</span>' : ''}</div>
+          </div>
+        </div>
+        <div class="pf-page pf-toc"><h2>目錄</h2>
+          <ol>${mine.map(n => `<li><span class="w">第 ${wk(n)} 週</span><span class="t">${esc(n.sub_title || '（沒有標題）')}</span><span class="dt">${fmtD(n.first_submitted_at)}</span></li>`).join('')}</ol></div>`;
+      mine.forEach((n, i) => {
+        const art = document.createElement('article'); art.className = 'pf-page pf-note';
+        art.innerHTML = `<div class="pf-meta"><span class="tag">第 ${wk(n)} 週</span><span>${fmtFull(n.first_submitted_at)}</span><span>·</span><span>${n.word_count || 0} 字</span><span class="pf-no">${esc(stu.name)}・${i + 1}／${mine.length}</span></div>
+          <h2 class="pf-title">${esc(n.sub_title || '（沒有標題）')}</h2><div class="doc pf-body"></div>`;
+        const body = art.querySelector('.pf-body');
+        renderDoc(body, n.sub_html);
+        body.querySelectorAll('.video-wrap').forEach(v => {   // 影片印不出來：改成 QR code＋網址
+          const spec = v.getAttribute('data-video') || '', id = spec.slice(3);
+          const url = spec.startsWith('yt:') ? `https://youtu.be/${id}` : `https://drive.google.com/file/d/${id}/view`;
+          const box = document.createElement('div'); box.className = 'pf-video';
+          box.innerHTML = `<div class="qr">${qrSVG(url)}</div><div class="vx"><b>影片</b><span>用手機掃 QR code 觀看</span><span class="url">${esc(url)}</span></div>`;
+          v.replaceWith(box);
+        });
+        body.querySelectorAll('img').forEach(im => { im.loading = 'lazy'; im.decoding = 'async'; });
+        sec.appendChild(art);
+      });
+      out.appendChild(sec);
+    }
+    if (!people) out.innerHTML = `<div class="empty"><b>沒有可以收錄的筆記</b>${st.pub ? '目前沒有已經公開的筆記；取消上面的勾選就會收錄全部已送出的筆記。' : '要先送出筆記，才會出現在作品集裡。'}</div>`;
+    $('#pfSum').textContent = `這份作品集：${people} 位學生、共 ${total} 篇筆記（只收已送出的版本，草稿不收）。` + (empty.length && isT ? `沒有收錄：${empty.join('、')}（沒有${st.pub ? '已公開' : '已送出'}的筆記）。` : '');
+    $('#pfPrint').disabled = !people;
+  };
+  render();
+  if (isT) $('#pfWho').onchange = e => { st.who = e.target.value; render(); };
+  $('#pfPub').onchange = e => { st.pub = e.target.checked; render(); };
+  $('#pfBrk').onchange = e => { st.brk = e.target.checked; render(); };
+  $('#pfPrint').onclick = async () => {
+    const btn = $('#pfPrint'), out = $('#pfOut');
+    out.querySelectorAll('img').forEach(im => { im.loading = 'eager'; });   // 列印前把還沒載入的照片全部載完
+    const wait = [...out.querySelectorAll('img')].filter(im => !im.complete);
+    if (wait.length) {
+      btn.disabled = true; toast(`照片載入中（${wait.length} 張）⋯`);
+      await Promise.race([Promise.all(wait.map(im => new Promise(r => { im.addEventListener('load', r, { once: true }); im.addEventListener('error', r, { once: true }); }))), new Promise(r => setTimeout(r, 20000))]);
+      btn.disabled = false;
+    }
+    const one = st.who !== 'all' ? students.find(x => x.id === st.who) : null;
+    const old = document.title;
+    document.title = `作品集-${cls.name}-${one ? `${one.seat_no ?? ''}${one.name}` : '全班'}`;   // 另存成 PDF 時的預設檔名
+    window.print();
+    setTimeout(() => { document.title = old; }, 1500);
+  };
+}
+
 /* 備份用：不壓縮的 zip（照片本來就壓過了）。parts 直接放 Blob，不會把全部照片同時塞進記憶體 */
 const CRC_T = (() => { const t = new Uint32Array(256); for (let i = 0; i < 256; i++) { let c = i; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[i] = c >>> 0; } return t; })();
 function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
@@ -1165,6 +1278,7 @@ async function route() {
     if (parts[0] === 'c' && parts[1]) {
       if (parts[2] === 'cards') return await viewCards(parts[1], params);
       if (parts[2] === 'wallcard') return await viewWallCard(parts[1]);
+      if (parts[2] === 'portfolio') return await viewPortfolio(parts[1], params);
       if (parts[2] === 's' && parts[3]) return await viewClass(parts[1], null, parts[3]);
       return await viewClass(parts[1], parts[2]);
     }

@@ -412,3 +412,52 @@ mark{background:#FFE79A;color:inherit;border-radius:3px;padding:0 2px}
 /* ===== 第三階段 3-2：刪除班級 ===== */
 .danger-box{border-color:#EBC6BB}
 .danger-box h3{color:var(--primary-h)}
+
+/* ===== 第四階段：期末作品集（A4 直式；螢幕上是預覽，列印時每個 .pf-page 接著排） ===== */
+.pf-wrap{max-width:calc(210mm + 64px)}
+.pf-opts .chk{margin:0;min-height:44px}
+.pf-page{background:#fff;border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow);width:210mm;max-width:100%;margin:0 auto 24px;padding:14mm 14mm 16mm;position:relative;color:#2B2725}
+.pf-cover{padding:0;min-height:260mm;display:flex;flex-direction:column;overflow:hidden}
+.pf-ban{height:72mm;position:relative;background:var(--weave),var(--g-banner);flex:none}
+.pf-ban::after{content:"";position:absolute;left:0;right:0;bottom:0;height:10px;background:var(--band) repeat-x}
+.pf-cin{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;padding:16mm 14mm 14mm}
+.pf-school{font-size:15pt;color:var(--ink-2);letter-spacing:.12em}
+.pf-kind{font-size:30pt;font-weight:700;margin-top:6mm;letter-spacing:.08em}
+.pf-class{font-size:16pt;color:var(--primary-h);margin-top:4mm;font-weight:700}
+.pf-name{font-size:34pt;font-weight:700;margin-top:22mm;letter-spacing:.1em}
+.pf-seat{font-size:15pt;color:var(--ink-2);margin-top:2mm;min-height:8mm}
+.pf-stats{display:flex;gap:10mm;margin-top:16mm;justify-content:center;flex-wrap:wrap}
+.pf-stats div{min-width:36mm;padding:5mm 4mm;border:1px solid var(--line);border-radius:4mm;background:var(--soft)}
+.pf-stats b{display:block;font-size:19pt}
+.pf-stats span{font-size:11pt;color:var(--ink-2)}
+.pf-foot{margin-top:auto;padding-top:12mm;display:flex;flex-direction:column;gap:2mm;font-size:12pt;color:var(--ink-2)}
+.pf-toc h2{font-size:20pt;margin:0 0 8mm;padding-bottom:3mm;border-bottom:2px solid var(--primary)}
+.pf-toc ol{list-style:none;margin:0;padding:0}
+.pf-toc li{display:flex;gap:5mm;align-items:baseline;padding:3mm 0;border-bottom:1px dashed var(--line);font-size:13pt;break-inside:avoid}
+.pf-toc .w{flex:none;width:22mm;color:var(--primary-h);font-weight:700}
+.pf-toc .t{flex:1;min-width:0}
+.pf-toc .dt{flex:none;color:var(--ink-2);font-size:11pt}
+.pf-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11pt;color:var(--ink-2)}
+.pf-meta .tag{background:var(--primary-l);color:var(--primary-h);font-weight:700;border-radius:999px;padding:1mm 4mm}
+.pf-meta .pf-no{margin-left:auto}
+.pf-title{font-size:20pt;line-height:1.4;margin:4mm 0 6mm;padding-bottom:3mm;border-bottom:2px solid var(--primary)}
+.pf-body{font-size:12pt;white-space:normal}
+.pf-body img{max-height:200mm;width:auto;break-inside:avoid}
+.pf-body tr,.pf-body li,.pf-body h1,.pf-body h2,.pf-body h3{break-inside:avoid}
+.pf-body h1,.pf-body h2,.pf-body h3{break-after:avoid}
+.pf-video{display:flex;gap:6mm;align-items:center;border:1px solid var(--line);border-radius:4mm;padding:5mm;margin:4mm 0;background:var(--soft);break-inside:avoid}
+.pf-video .qr{width:30mm;height:30mm;flex:none;background:#fff;padding:1.5mm;border-radius:2mm}
+.pf-video .qr svg{width:100%;height:100%;display:block}
+.pf-video .vx{display:flex;flex-direction:column;gap:1mm;min-width:0;font-size:12pt}
+.pf-video .url{font-size:10pt;color:var(--ink-2);word-break:break-all}
+@media (max-width:760px){ .pf-page{padding:20px 16px} .pf-cover{padding:0;min-height:0} .pf-name{margin-top:10mm} .pf-stats{gap:3mm;margin-top:8mm} .pf-stats div{min-width:26mm} }
+@media print{
+  .pf-wrap{max-width:none}
+  .pf-page{border:none;border-radius:0;box-shadow:none;width:auto;max-width:none;margin:0;padding:0}
+  .pf-cover{height:268mm;min-height:0;break-after:page}
+  .pf-ban,.pf-stats div,.pf-meta .tag,.pf-video{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pf-toc{break-after:page}
+  .pf-stu + .pf-stu{break-before:page}
+  .pf.brk .pf-note + .pf-note{break-before:page}
+  .pf:not(.brk) .pf-note + .pf-note{margin-top:10mm;padding-top:8mm;border-top:1px solid #BBB}
+}
