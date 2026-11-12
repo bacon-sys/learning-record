@@ -585,6 +585,39 @@ async function viewRoster(cls, data, head) {
 }
 
 /* ---------- 老師：班級設定 ---------- */
+/* 清掉「沒有任何筆記用到、而且上傳超過 7 天」的照片。能不能刪由資料庫規則把關，這裡只是照清單送出 */
+async function cleanPhotos(cid) {
+  const info = await q(sb.rpc('class_photos', { cid }));
+  let removed = 0;
+  for (let i = 0; i < info.removable.length; i += 100) {
+    const { data, error } = await sb.storage.from(BUCKET).remove(info.removable.slice(i, i + 100));
+    if (error) throw error;
+    removed += (data || []).length;
+  }
+  return { removed, wanted: info.removable.length };
+}
+async function fillPhotoBox(cls) {
+  const el = $('#phBox'); if (!el) return;
+  let info;
+  try { info = await q(sb.rpc('class_photos', { cid: cls.id })); }
+  catch (e) { el.innerHTML = `<p class="d" style="margin:0">照片用量讀不到：${esc(e.message || e)}</p>`; return; }
+  if (!$('#phBox')) return;   // 讀的時候已經換頁了
+  const can = info.removable.length, keep = info.unused - can;
+  el.innerHTML = `<p style="margin:0 0 12px">這個班共有 <b>${info.total}</b> 張照片（${fmtSize(info.total_bytes)}）。</p>
+    ${!info.unused ? `<p style="margin:0">${tagOk('沒有用不到的照片')}</p>`
+      : `<p style="margin:0 0 12px">其中 <b>${info.unused}</b> 張（${fmtSize(info.unused_bytes)}）沒有被任何筆記用到。${keep > 0 ? `${can ? '另外有' : '這'} ${keep} 張是最近 7 天內上傳的，先保留（學生可能還在編輯）。` : ''}</p>
+         ${can ? `<button class="ab" id="btnClean" type="button">${ICON.trash}清理 ${can} 張沒用到的照片（${fmtSize(info.removable_bytes)}）</button>` : ''}`}`;
+  const b = $('#btnClean');
+  if (b) b.onclick = async () => {
+    if (!await confirmBox('清理照片', `<p>會永久刪除 <b>${can}</b> 張照片。這些照片沒有出現在任何一篇筆記的草稿或送出版裡，而且上傳超過 7 天。</p><p>筆記裡看得到的照片不會被刪。</p>`, '清理', true)) return;
+    b.disabled = true;
+    try {
+      const r = await cleanPhotos(cls.id);
+      toast(r.removed === r.wanted ? `已清掉 ${r.removed} 張照片` : `清掉 ${r.removed} 張；有 ${r.wanted - r.removed} 張沒有清（可能剛好被用到了）`);
+    } catch (e) { toast('清理沒有成功：' + (e.message || e)); }
+    fillPhotoBox(cls);
+  };
+}
 async function viewSettings(cls, data, head) {
   app.innerHTML = head + `
     <div class="two">
@@ -612,12 +645,18 @@ async function viewSettings(cls, data, head) {
       <p class="d">${cls.archived ? '取消封存後，學生又可以新增和修改筆記。' : '封存後，學生不能再新增或修改這個班級的筆記，但作品都會保留，老師和學生都還看得到。'}</p>
       <button class="ab ${cls.archived ? '' : 'danger'}" id="btnArchive">${ICON.archive}${cls.archived ? '取消封存' : '封存這個班級'}</button>
     </div>
+    <div class="box">
+      <h3>照片空間</h3>
+      <p class="d">學生在編輯時把照片刪掉，檔案還是會留在雲端空間。這裡可以把「沒有任何筆記用到、而且上傳超過 7 天」的照片清掉。封存班級時也會自動清一次。</p>
+      <div id="phBox"><p class="d" style="margin:0">讀取中⋯</p></div>
+    </div>
     ${cls.created_by === S.uid || S.me.is_admin ? `<div class="box danger-box">
       <h3>刪除班級</h3>
       <p class="d">把這個班級和全班的筆記、照片<b>永久刪除</b>，刪了就找不回來。只是學期結束的話，請用上面的「封存」。適合用在測試班或開錯的班級。</p>
       <button class="ab danger" id="btnDelClass">${ICON.trash}刪除這個班級</button>
     </div>` : ''}
   </div>`;
+  fillPhotoBox(cls);
   $('#fCls').onsubmit = async e => {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
     try { await q(sb.from('classes').update({ name: f.name.trim(), term: f.term.trim(), start_date: f.start_date }).eq('id', cls.id)); toast('已儲存'); route(); } catch (err) { toast('儲存沒有成功：' + err.message); }
@@ -658,7 +697,12 @@ async function viewSettings(cls, data, head) {
   };
   $('#btnArchive').onclick = async () => {
     if (!cls.archived && !await confirmBox('封存班級', `<p>確定要封存「${esc(cls.name)}」嗎？封存後學生只能看、不能改。之後可以再取消封存。</p>`, '封存', true)) return;
-    try { await q(sb.from('classes').update({ archived: !cls.archived }).eq('id', cls.id)); toast(cls.archived ? '已取消封存' : '已封存'); route(); } catch (e) { toast(e.message); }
+    try {
+      await q(sb.from('classes').update({ archived: !cls.archived }).eq('id', cls.id));
+      let extra = '';
+      if (!cls.archived) { try { const r = await cleanPhotos(cls.id); if (r.removed) extra = `，並清掉 ${r.removed} 張沒用到的照片`; } catch (e) { console.warn('封存後清理照片沒有成功', e); } }
+      toast(cls.archived ? '已取消封存' : '已封存' + extra); route();
+    } catch (e) { toast(e.message); }
   };
 }
 
@@ -1200,10 +1244,11 @@ async function downloadBackup(withPhotos, say) {
 async function viewAdmin() {
   if (!(S.role === 'teacher' && S.me.is_admin)) { location.hash = '#/'; return; }
   loading();
-  const [ts, logs, st] = await Promise.all([
+  const [ts, logs, st, ph] = await Promise.all([
     q(sb.from('teachers').select('*').order('created_at')),
     q(sb.from('backup_log').select('at,notes_count,files_count,bytes,with_photos').order('at', { ascending: false }).limit(1)),
     q(sb.from('app_status').select('at,n').eq('key', 'keepalive').maybeSingle()),
+    q(sb.rpc('photo_total')).catch(e => { console.warn(e); return null; }),
   ]);
   const last = logs[0];
   const bkState = !last ? tagTodo('還沒備份過')
@@ -1220,7 +1265,8 @@ async function viewAdmin() {
       <p style="margin:0 0 16px">${bkState}${last ? `<span class="d" style="margin-left:10px;color:var(--ink-2);font-size:16px">${fmtDT(last.at)}・筆記 ${last.notes_count} 篇・${last.with_photos ? `照片 ${last.files_count} 張` : '不含照片'}・${fmtSize(last.bytes)}</span>` : ''}</p>
       <label class="chk" style="margin-bottom:14px"><input type="checkbox" id="bkPhotos" checked>包含照片（檔案比較大，下載比較久）</label>
       <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap"><button class="ab pri" id="bkGo" type="button">下載備份</button><span id="bkMsg" role="status" style="color:var(--ink-2);font-size:16px"></span></div>
-      <p class="d" style="margin:16px 0 0">備份檔裡有學生的真實姓名和登入卡密碼，請放在只有老師能打開的地方。</p></div>
+      <p class="d" style="margin:16px 0 0">備份檔裡有學生的真實姓名和登入卡密碼，請放在只有老師能打開的地方。</p>
+      ${ph ? `<p class="d" style="margin:10px 0 0">目前雲端空間共有照片 ${ph.count} 張、${fmtSize(ph.bytes)}（免費空間上限 1 GB）。${ph.bytes > 8e8 ? '<b>快滿了</b>：請到各班的「班級設定」清理沒用到的照片，或刪除不需要的舊班級。' : ''}</p>` : ''}</div>
     <div class="box"><h3>防暫停</h3>
       <p class="d">資料庫是免費方案，超過一星期沒人用會被暫停。所以有一個排程每天凌晨自動連線一次，寒暑假也不會停。</p>
       <p style="margin:0">${kaState}</p>
