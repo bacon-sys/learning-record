@@ -1282,8 +1282,11 @@ async function viewAdmin() {
       <p class="d">資料庫是免費方案，超過一星期沒人用會被暫停。所以有一個排程每天自動連線兩次（凌晨和下午），寒暑假也不會停。</p>
       <p style="margin:0">${kaState}</p>
       ${st && daysAgo(st.at) > 3 || !st ? `<p class="d" style="margin:14px 0 0">如果一直沒有紀錄：到 GitHub 的 learning-record 儲存庫 →「Actions」→ 左邊「防暫停」→ 若出現「Enable workflow」就按下去，再按「Run workflow」。</p>` : ''}</div>
-    <div class="box"><h3>老師帳號</h3><table class="acct"><thead><tr><th>稱呼</th><th>Email</th><th>身分</th></tr></thead>
-      <tbody>${ts.map(t => `<tr><td>${esc(t.display_name)}</td><td>${esc(t.email)}</td><td>${t.is_admin ? '管理者' : '老師'}</td></tr>`).join('')}</tbody></table></div>
+    <div class="box"><h3>老師帳號</h3>
+      <p class="d">老師忘記密碼時，按「重設密碼」會產生一組新的暫時密碼，請轉交給那位老師。自己的密碼請到「我的帳號」改。</p>
+      <div class="tbl-scroll"><table class="acct"><thead><tr><th>稱呼</th><th>Email</th><th>身分</th><th></th></tr></thead>
+      <tbody>${ts.map(t => `<tr><td>${esc(t.display_name)}</td><td>${esc(t.email)}</td><td>${t.is_admin ? '管理者' : '老師'}</td>
+        <td>${t.id === S.uid ? '<span style="color:var(--ink-2);font-size:16px">（你自己）</span>' : `<button class="ab sm" type="button" data-rstt="${t.id}">${ICON.refresh}重設密碼</button>`}</td></tr>`).join('')}</tbody></table></div></div>
     <div class="box"><h3>新增老師</h3><p class="d">系統會產生一組暫時密碼，請轉交給那位老師，並請他登入後到「我的帳號」改密碼。</p>
       <form id="fNewT" style="max-width:460px">
         <label class="fld"><span>老師的 Email</span><input name="email" type="email" required></label>
@@ -1299,6 +1302,16 @@ async function viewAdmin() {
       $('#bkMsg').textContent = `已下載：筆記 ${r.notes} 篇${withPhotos ? `、照片 ${r.photos} 張` : '、不含照片'}（${fmtSize(r.size)}）${r.missing ? `；有 ${r.missing} 張照片沒抓到，清單在壓縮檔裡` : ''}`;
     } catch (e) { console.error(e); msg.textContent = '備份沒有成功：' + (e.message || e); btn.disabled = false; }
   };
+  app.querySelectorAll('[data-rstt]').forEach(b => b.onclick = async () => {
+    const t = ts.find(x => x.id === b.dataset.rstt);
+    if (!await confirmBox('重設密碼', `<p>要幫 <b>${esc(t.display_name)}</b>（${esc(t.email)}）重設密碼嗎？</p><p>原本的密碼會馬上失效，他在其他裝置上也會被登出。</p>`, '重設', true)) return;
+    b.disabled = true;
+    try {
+      const r = await q(sb.rpc('admin_reset_teacher_password', { tid: t.id }));
+      await infoBox('密碼已經重設', `<p>${esc(t.display_name)}（${esc(r.email)}）的暫時密碼：</p><p style="font-size:30px;font-weight:700;letter-spacing:.06em" class="mono">${esc(r.password)}</p><p>請轉交給老師，登入後到「我的帳號」改成自己的密碼。這組密碼不會再顯示一次。</p>`);
+    } catch (e) { toast('重設沒有成功：' + (e.message || e)); }
+    b.disabled = false;
+  });
   $('#fNewT').onsubmit = async e => {
     e.preventDefault(); const f = Object.fromEntries(new FormData(e.target));
     try {

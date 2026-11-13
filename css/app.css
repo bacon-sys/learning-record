@@ -463,3 +463,5 @@ mark{background:#FFE79A;color:inherit;border-radius:3px;padding:0 2px}
   .pf.brk .pf-note + .pf-note{break-before:page}
   .pf:not(.brk) .pf-note + .pf-note{margin-top:10mm;padding-top:8mm;border-top:1px solid #BBB}
 }
+
+.tbl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
